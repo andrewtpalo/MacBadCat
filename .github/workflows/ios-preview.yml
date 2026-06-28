@@ -1,0 +1,56 @@
+name: Build iOS Simulator app (for Appetize preview)
+
+# Lets a Windows user with no Mac get a runnable build.
+# Runs on a free macOS cloud runner, produces "BadCat-Simulator.zip"
+# which you upload to https://appetize.io to play it in your browser.
+
+on:
+  workflow_dispatch:        # run it manually from the Actions tab
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator (no signing needed)
+        run: |
+          xcodebuild build \
+            -project MacBadCat.xcodeproj \
+            -scheme MacBadCat \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Zip the .app for Appetize
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          echo "Found: $APP_PATH"
+          cd "$(dirname "$APP_PATH")"
+          ditto -c -k --sequesterRsrc --keepParent "$(basename "$APP_PATH")" "$GITHUB_WORKSPACE/BadCat-Simulator.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BadCat-Simulator
+          path: BadCat-Simulator.zip
+
+      # OPTIONAL: auto-upload to Appetize so you skip the manual step.
+      # Add a repo secret named APPETIZE_TOKEN (from appetize.io account settings),
+      # then uncomment the step below. It prints a public URL you open on Windows.
+      #
+      # - name: Upload to Appetize
+      #   run: |
+      #     curl -sS https://${{ secrets.APPETIZE_TOKEN }}@api.appetize.io/v1/apps \
+      #       -F "file=@BadCat-Simulator.zip" -F "platform=ios" | tee appetize.json
+      #     echo "Open the publicURL printed above on your PC."

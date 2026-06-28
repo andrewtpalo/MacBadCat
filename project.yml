@@ -1,0 +1,24 @@
+name: MacBadCat
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+targets:
+  MacBadCat:
+    type: application
+    platform: iOS
+    sources:
+      - App/Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.macbadcat
+        PRODUCT_NAME: Bad Cat
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        ENABLE_PREVIEWS: YES
+        DEVELOPMENT_TEAM: ""
