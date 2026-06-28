@@ -29,8 +29,16 @@ jobs:
             -scheme MacBadCat \
             -configuration Debug \
             -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -arch x86_64 \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify simulator binary architecture
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          echo "App bundle: $APP_PATH"
+          lipo -info "$APP_PATH/MacBadCat"
 
       - name: Zip the .app for Appetize
         run: |
