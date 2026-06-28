@@ -7,7 +7,7 @@ name: Build iOS Simulator app (for Appetize preview)
 on:
   workflow_dispatch:        # run it manually from the Actions tab
   push:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   build:
