@@ -37,7 +37,9 @@ jobs:
         run: |
           APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
           echo "App bundle: $APP_PATH"
-          lipo -info "$APP_PATH/MacBadCat"
+          EXECUTABLE=$(plutil -extract CFBundleExecutable xml1 -o - "$APP_PATH/Info.plist" | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p')
+          echo "Executable: $EXECUTABLE"
+          lipo -info "$APP_PATH/$EXECUTABLE"
 
       - name: Zip the .app for Appetize
         run: |
