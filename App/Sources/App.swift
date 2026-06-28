@@ -8,13 +8,13 @@ func debugCheckpoint(_ s: String) {
     // Ensure it's written quickly.
     UserDefaults.standard.synchronize()
 
+}
+
 @main
 struct MacBadCatApp: App {
     var body: some Scene {
         WindowGroup {
-            // record checkpoint before creating the main scene
-            debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
-            SpriteView(scene: makeScene(geo.size))
+            GameContainerView()
                 .ignoresSafeArea()
                 .statusBarHidden(true)
                 .persistentSystemOverlays(.hidden)
@@ -25,6 +25,8 @@ struct MacBadCatApp: App {
 struct GameContainerView: View {
     var body: some View {
         GeometryReader { geo in
+            // record checkpoint before creating the main scene
+            debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
             SpriteView(scene: makeScene(geo.size))
                 .ignoresSafeArea()
         }
