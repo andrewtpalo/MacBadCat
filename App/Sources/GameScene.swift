@@ -5,6 +5,7 @@ import UIKit
 final class BreakableSprite: SKNode {
     let def: Breakable
     let approachX: CGFloat
+    let approachY: CGFloat
     private(set) var messed = false
     private let icon: SKLabelNode
     private var surface: SKShapeNode?
@@ -12,6 +13,7 @@ final class BreakableSprite: SKNode {
     init(def: Breakable, x: CGFloat, floorY: CGFloat, topPx: CGFloat) {
         self.def = def
         self.approachX = x
+        self.approachY = floorY + min(max(topPx * 0.45, 0), 110)
         self.icon = makeLabel(BreakableSprite.emoji(def.kind), size: 30)
         super.init()
         position = CGPoint(x: x, y: floorY)
@@ -26,7 +28,13 @@ final class BreakableSprite: SKNode {
             }
             addChild(s); surface = s
         }
+        // place icon at its visual height above the floor; create a small shelf if it's high
         icon.position = CGPoint(x: 0, y: topPx + 16)
+        if approachY - floorY > 36 {
+            let shelf = SKShapeNode(rect: CGRect(x: -40, y: icon.position.y - 8, width: 80, height: 10), cornerRadius: 3)
+            shelf.fillColor = UIColor(hex: 0x8B6A45); shelf.strokeColor = .clear; shelf.zPosition = -1
+            addChild(shelf)
+        }
         addChild(icon)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -100,13 +108,21 @@ final class GameScene: BaseScene {
     private var lastTime: TimeInterval = 0
     private var floorY: CGFloat = 0
     private var spawnTimer: Double = 4
+    private var world: SKNode!
+    private var worldWidth: CGFloat = 0
+    private var levelDepth: Int = 1
+    private var climbBonus: Int = 0
 
     // cat control
     private enum Action { case none, knock, eat, drink, nap }
     private var action: Action = .none
     private var actT: Double = 0
     private var targetX: CGFloat?
+    private var targetY: CGFloat?
     private var targetObj: AnyObject?
+    private var puzzleState = 0
+    private var puzzleTarget: BreakableSprite?
+    private var puzzleTimer: Double = 0
 
     // human gaze
     private var gazeTimer: Double = 4
@@ -141,38 +157,43 @@ final class GameScene: BaseScene {
         energy = min(70, maxEnergy)
 
         floorY = bottomInset + 150 + 30
+        levelDepth = min(4, 1 + day / 2)
+        worldWidth = size.width * (1.4 + CGFloat(levelDepth - 1) * 0.2)
+        world = SKNode(); addChild(world)
         buildRoom()
         buildBowls()
         buildBreakables()
 
         human.position = CGPoint(x: size.width * 0.84, y: floorY)
         human.setScale(min(1.1, size.width / 390))
-        addChild(human)
+        world.addChild(human)
 
         cat.position = CGPoint(x: size.width * 0.4, y: floorY)
         cat.baseScale = min(1.15, size.width / 360)
-        addChild(cat)
+        world.addChild(cat)
 
         buildHUD()
         setGaze(.distract)
-        showThought("that vase looks unstable. let me help")
+        puzzleState = 0
+        puzzleTimer = 0
+        showThought("the room has a pattern. watch the human, then strike the right target")
     }
 
     // MARK: build world
     private func buildRoom() {
-        let wall = SKSpriteNode(color: room.wall, size: CGSize(width: size.width, height: size.height))
-        wall.anchorPoint = .zero; wall.zPosition = -100; addChild(wall)
+        let wall = SKSpriteNode(color: room.wall, size: CGSize(width: worldWidth, height: size.height))
+        wall.anchorPoint = .zero; wall.zPosition = -100; world.addChild(wall)
         let woodH = floorY
-        let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: size.width, height: woodH))
-        floor.anchorPoint = .zero; floor.zPosition = -90; addChild(floor)
+        let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: worldWidth, height: woodH))
+        floor.anchorPoint = .zero; floor.zPosition = -90; world.addChild(floor)
         // window
         let win = SKShapeNode(rect: CGRect(x: size.width*0.12, y: size.height*0.62, width: size.width*0.22, height: size.height*0.2), cornerRadius: 6)
         win.fillColor = UIColor(hex: 0xBFE3F2); win.strokeColor = Palette.woodDeep; win.lineWidth = 5; win.zPosition = -80
-        addChild(win)
+        world.addChild(win)
         // sunbeam
         sunbeam = SKShapeNode()
         sunbeam.fillColor = Palette.sun; sunbeam.strokeColor = .clear; sunbeam.alpha = 0.32; sunbeam.zPosition = -70
-        addChild(sunbeam)
+        world.addChild(sunbeam)
     }
     private func buildBowls() {
         func bowl(_ x: CGFloat, _ color: UIColor) -> SKNode {
@@ -183,17 +204,17 @@ final class GameScene: BaseScene {
         }
         foodBowl = bowl(size.width * 0.10, Palette.flameDeep)
         let fl = makeLabel("🐟", size: 16); fl.position = CGPoint(x: 0, y: 0); foodBowl.addChild(fl)
-        addChild(foodBowl)
+        world.addChild(foodBowl)
         waterBowl = bowl(size.width * 0.20, Palette.water)
         let wl = makeLabel("💧", size: 14); wl.position = CGPoint(x: 0, y: 0); waterBowl.addChild(wl)
-        addChild(waterBowl)
+        world.addChild(waterBowl)
     }
     private func buildBreakables() {
         for b in room.breakables {
-            let x = 28 + b.x * (size.width - 56)
+            let x = 28 + b.x * (worldWidth - 56)
             let topPx = b.top * (size.height * 0.42)
             let s = BreakableSprite(def: b, x: x, floorY: floorY, topPx: topPx)
-            addChild(s); breakables.append(s)
+            world.addChild(s); breakables.append(s)
         }
     }
 
@@ -295,29 +316,36 @@ final class GameScene: BaseScene {
     // MARK: input
     override func worldTouch(at point: CGPoint) {
         guard !ended else { return }
+        let worldPoint = convert(point, to: world)
         var pick: AnyObject? = nil
         var best: CGFloat = 50
         for b in breakables where !b.messed {
-            let d = hypot(point.x - b.position.x, point.y - (b.position.y + 40))
+            let d = hypot(worldPoint.x - b.position.x, worldPoint.y - (b.position.y + 40))
             if d < best { best = d; pick = b }
         }
         for c in collectibles {
-            let d = hypot(point.x - c.position.x, point.y - c.position.y)
+            let d = hypot(worldPoint.x - c.position.x, worldPoint.y - c.position.y)
             if d < best { best = d; pick = c }
         }
         let bowls: [SKNode] = [foodBowl, waterBowl]
         for bw in bowls {
-            let d = hypot(point.x - bw.position.x, point.y - bw.position.y)
+            let d = hypot(worldPoint.x - bw.position.x, worldPoint.y - bw.position.y)
             if d < best { best = d; pick = bw }
         }
         action = .none; actT = 0
         if let obj = pick {
             targetObj = obj
-            if let b = obj as? BreakableSprite { targetX = b.approachX }
-            else { targetX = (obj as! SKNode).position.x }
+            if let b = obj as? BreakableSprite {
+                targetX = b.approachX
+                targetY = b.approachY
+            } else if let node = obj as? SKNode {
+                targetX = node.position.x
+                targetY = node.position.y
+            }
         } else {
             targetObj = nil
-            targetX = max(24, min(size.width - 24, point.x))
+            targetX = max(24, min(worldWidth - 24, worldPoint.x))
+            targetY = nil
         }
     }
 
@@ -354,6 +382,7 @@ final class GameScene: BaseScene {
         // behaviour-based suspicion / refuel
         let inSun = abs(cat.position.x - sunX) < size.width * 0.07
         let idle = (targetX == nil && action == .none)
+        advancePuzzle(dt)
         if action == .nap || (idle && inSun) {
             if action != .nap { action = .nap; cat.setNapping(true) }
             energy = min(maxEnergy, energy + dtf * (7 + CGFloat(upNap) * 2))
@@ -379,6 +408,34 @@ final class GameScene: BaseScene {
         syncHUD()
     }
 
+    private func advancePuzzle(_ dt: Double) {
+        puzzleTimer += dt
+        let roomIndex = Content.roomIndex(roomId)
+        let targetCount = max(2, min(4, 2 + roomIndex))
+        if chaos >= targetCount * 8 && puzzleState == 0 {
+            puzzleState = 1
+            if let next = breakables.filter({ !$0.messed }).sorted(by: { $0.approachX < $1.approachX }).first {
+                puzzleTarget = next
+                showThought("the best route is to bait the human before touching the high shelf")
+            }
+        }
+        if puzzleState == 1, let target = puzzleTarget {
+            if watching {
+                if puzzleTimer > 1.2 {
+                    showThought("now — the human is distracted, use the opening")
+                    puzzleTimer = 0
+                }
+            } else if !target.messed && abs(cat.position.x - target.approachX) < 80 {
+                puzzleState = 2
+                showThought("good. a clean line matters more than a fast one")
+            }
+        }
+        if puzzleState == 2 && chaos >= targetCount * 12 {
+            puzzleState = 3
+            showThought("the room is yours. keep the pressure on the right sequence")
+        }
+    }
+
     private func updateSun() {
         let p = UIBezierPath()
         p.move(to: CGPoint(x: sunX - 42, y: floorY))
@@ -387,21 +444,38 @@ final class GameScene: BaseScene {
         p.addLine(to: CGPoint(x: sunX - 66, y: 0))
         p.close()
         sunbeam.path = p.cgPath
+        sunbeam.position.x = 0
+    }
+
+    private func updateCamera() {
+        let desired = CGPoint(x: min(max(cat.position.x - size.width * 0.4, 0), worldWidth - size.width), y: 0)
+        let move = CGPoint(x: -desired.x, y: 0)
+        world.position = move
+        let doorX = min(max(size.width * 0.86, 80), worldWidth - 80)
+        human.position.x = doorX
     }
 
     private func moveCat(_ dt: CGFloat) {
         if action != .none && action != .nap { return }
         guard let tx = targetX else { return }
-        let d = tx - cat.position.x
-        if abs(d) > 4 {
+        let dy = (targetY ?? floorY) - cat.position.y
+        let dx = tx - cat.position.x
+        let dist = hypot(dx, dy)
+        if dist > 6 {
             if action == .nap { action = .none; cat.setNapping(false) }
-            cat.face(d > 0 ? 1 : -1)
-            cat.position.x += (d > 0 ? 1 : -1) * min(abs(d), 150 * dt)
+            cat.face(dx > 0 ? 1 : -1)
+            let speed: CGFloat = 150 + CGFloat(levelDepth - 1) * 20
+            let step = min(dist, speed * dt)
+            let nx = cat.position.x + dx / dist * step
+            let ny = cat.position.y + dy / dist * step
+            cat.position = CGPoint(x: max(24, min(worldWidth - 24, nx)), y: max(floorY, min(size.height - 120, ny)))
             cat.setWalking(true)
+            energy = max(0, energy - dt * (dy > 18 ? 3 : 1.2))
+            updateCamera()
         } else {
             cat.setWalking(false)
             if let obj = targetObj { beginAction(on: obj) }
-            targetX = nil; targetObj = nil
+            targetX = nil; targetY = nil; targetObj = nil
         }
     }
 
@@ -439,16 +513,36 @@ final class GameScene: BaseScene {
 
     private func commitCrime(_ b: BreakableSprite) {
         b.makeMessed()
+        if puzzleState == 1 && b === puzzleTarget {
+            puzzleState = 2
+            showThought("that was the right move; keep the chain alive")
+        }
         let mult = 1 + 0.15 * CGFloat(upValue)
         let gainChaos = Int(CGFloat(b.def.chaos) * mult)
         let gainCoins = Int(CGFloat(b.def.coins) * mult)
-        chaos += gainChaos
-        runCoins += gainCoins
-        GameData.shared.addCoins(gainCoins)
-        energy = max(0, energy - CGFloat(b.def.energyCost))
+        var totalChaos = gainChaos
+        var totalCoins = gainCoins
+        // bonus for high / climb targets
+        let highThreshold = floorY + 36
+        if b.approachY > highThreshold {
+            let bonusChaos = Int(Double(gainChaos) * 0.35)
+            let bonusCoins = Int(Double(gainCoins) * 0.25)
+            totalChaos += bonusChaos
+            totalCoins += bonusCoins
+            popText("+🥾", at: CGPoint(x: b.position.x, y: b.position.y + 80), color: Palette.gold)
+            // risk increases for climbing
+            susp = min(100, susp + 12)
+            climbBonus += 1
+        } else {
+            climbBonus = 0
+        }
+        chaos += totalChaos
+        runCoins += totalCoins
+        GameData.shared.addCoins(totalCoins)
+        energy = max(0, energy - CGFloat(b.def.energyCost) - CGFloat(max(0, Int((b.approachY - floorY) / 20))) * 4)
         SFX.crash()
         shake()
-        popText("+\(gainChaos)", at: CGPoint(x: b.position.x, y: b.position.y + 60), color: Palette.flameDeep)
+        popText("+\(totalChaos)", at: CGPoint(x: b.position.x, y: b.position.y + 60), color: Palette.flameDeep)
 
         if watching {
             susp = min(100, susp + 36); human.mad = 1.2
@@ -469,9 +563,9 @@ final class GameScene: BaseScene {
             spawnTimer = Double.random(in: 4.5...7.5)
             let gem = Double.random(in: 0...1) < 0.18
             let c = Collectible(value: gem ? 25 : 5, isGem: gem)
-            c.position = CGPoint(x: CGFloat.random(in: 40...(size.width - 40)), y: floorY + 14)
+            c.position = CGPoint(x: CGFloat.random(in: 40...(worldWidth - 40)), y: floorY + 14)
             c.alpha = 0; c.run(.fadeIn(withDuration: 0.3))
-            addChild(c); collectibles.append(c)
+            world.addChild(c); collectibles.append(c)
         }
     }
     private func autoCollect() {
