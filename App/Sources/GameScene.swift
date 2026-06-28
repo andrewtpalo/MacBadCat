@@ -150,6 +150,9 @@ final class GameScene: BaseScene {
     required init?(coder: NSCoder) { fatalError() }
 
     override func build() {
+        if size.width <= 0 || size.height <= 0 {
+            size = CGSize(width: 390, height: 844)
+        }
         let d = GameData.shared
         upPaws = d.upgradeLevel("up_paws"); upBelly = d.upgradeLevel("up_belly")
         upNap = d.upgradeLevel("up_nap"); upCharm = d.upgradeLevel("up_charm"); upValue = d.upgradeLevel("up_value")
@@ -176,7 +179,6 @@ final class GameScene: BaseScene {
         setGaze(.distract)
         puzzleState = 0
         puzzleTimer = 0
-        showThought("the room has a pattern. watch the human, then strike the right target")
     }
 
     // MARK: build world
@@ -600,6 +602,7 @@ final class GameScene: BaseScene {
         l.run(.sequence([.group([.moveBy(x: 0, y: 36, duration: 0.7), .fadeOut(withDuration: 0.7)]), .removeFromParent()]))
     }
     private func showThought(_ text: String) {
+        guard size.width > 0, size.height > 0 else { return }
         thoughtNode?.removeFromParent()
         let node = SKNode()
         let label = makeLabel(text, size: 13, color: Palette.ink, weight: .semibold)
@@ -610,7 +613,9 @@ final class GameScene: BaseScene {
         let h = label.frame.height + 18
         let bubble = roundedPanel(CGSize(width: w, height: h), fill: Palette.panel, corner: 12, shadow: false)
         node.addChild(bubble); node.addChild(label)
-        node.position = CGPoint(x: min(max(cat.position.x, w/2 + 8), size.width - w/2 - 8), y: cat.position.y + 92)
+        let x = cat.parent == nil ? size.width/2 : min(max(cat.position.x, w/2 + 8), size.width - w/2 - 8)
+        let y = cat.parent == nil ? size.height * 0.72 : cat.position.y + 92
+        node.position = CGPoint(x: x, y: y)
         node.zPosition = 65
         addChild(node); thoughtNode = node
         node.run(.sequence([.wait(forDuration: 2.6), .fadeOut(withDuration: 0.3), .removeFromParent()]))
