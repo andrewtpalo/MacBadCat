@@ -4,6 +4,7 @@ import UIKit
 // MARK: - Main Menu
 final class MenuScene: BaseScene {
     override func build() {
+        debugCheckpoint("MenuScene.build:start")
         addRoomBackground(Palette.wall)
         // ambient floor strip
         let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: size.width, height: size.height * 0.22))
@@ -35,6 +36,10 @@ final class MenuScene: BaseScene {
 
         _ = addCoinChip()
         addSoundToggle()
+        // show last checkpoint for debugging
+        let last = UserDefaults.standard.string(forKey: "macbadcat.lastCheckpoint") ?? "(none)"
+        let cp = makeLabel("chk: \(last)", size: 10, color: Palette.inkSoft, weight: .regular)
+        cp.position = CGPoint(x: size.width/2, y: 18); cp.zPosition = 120; addChild(cp)
     }
 
     private func addSoundToggle() {

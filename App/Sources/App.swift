@@ -2,11 +2,19 @@ import SwiftUI
 import SpriteKit
 import AudioToolbox
 
+// Simple persistent checkpoint helper for crash tracing.
+func debugCheckpoint(_ s: String) {
+    UserDefaults.standard.set(s, forKey: "macbadcat.lastCheckpoint")
+    // Ensure it's written quickly.
+    UserDefaults.standard.synchronize()
+
 @main
 struct MacBadCatApp: App {
     var body: some Scene {
         WindowGroup {
-            GameContainerView()
+            // record checkpoint before creating the main scene
+            debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
+            SpriteView(scene: makeScene(geo.size))
                 .ignoresSafeArea()
                 .statusBarHidden(true)
                 .persistentSystemOverlays(.hidden)

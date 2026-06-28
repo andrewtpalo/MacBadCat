@@ -15,6 +15,7 @@ final class CatNode: SKNode {
 
     override init() {
         super.init()
+        debugCheckpoint("Cat.init:start")
         buildUpright()
         buildCurled()
         addChild(upright)
@@ -26,6 +27,7 @@ final class CatNode: SKNode {
             .scaleY(to: 0.98, duration: 1.0)
         ])))
         applySkin(GameData.shared.equippedSkin)
+        debugCheckpoint("Cat.init:done")
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -205,6 +207,7 @@ final class HumanNode: SKNode {
         phone = SKShapeNode(rect: CGRect(x: -10, y: 18, width: 20, height: 12), cornerRadius: 2)
         doorMark = makeLabel("🚪", size: 26)
         super.init()
+        debugCheckpoint("Human.init:start")
         buildCouch()
         buildPerson()
         addChild(couch)
@@ -212,6 +215,7 @@ final class HumanNode: SKNode {
         doorMark.position = CGPoint(x: 0, y: 96); doorMark.isHidden = true
         addChild(doorMark)
         setGaze(.distract, lookDir: 0)
+        debugCheckpoint("Human.init:done")
     }
     required init?(coder: NSCoder) { fatalError() }
 

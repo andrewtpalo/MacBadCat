@@ -146,6 +146,7 @@ final class GameScene: BaseScene {
         self.room = Content.room(roomId)
         self.cfg = Content.dayConfig(room: roomId, day: day)
         super.init(size: size)
+        debugCheckpoint("GameScene.init:\(roomId):day:\(day)")
     }
     required init?(coder: NSCoder) { fatalError() }
 

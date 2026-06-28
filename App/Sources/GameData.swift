@@ -43,10 +43,18 @@ final class GameData: Codable {
     private static let key = "macbadcat.save.v1"
 
     static func load() -> GameData {
-        if let data = UserDefaults.standard.data(forKey: key),
-           let decoded = try? JSONDecoder().decode(GameData.self, from: data) {
-            return decoded
+        debugCheckpoint("GameData.load:start")
+        if let data = UserDefaults.standard.data(forKey: key) {
+            if let decoded = try? JSONDecoder().decode(GameData.self, from: data) {
+                debugCheckpoint("GameData.load:decoded")
+                return decoded
+            } else {
+                debugCheckpoint("GameData.load:decodeFailed")
+            }
+        } else {
+            debugCheckpoint("GameData.load:noData")
         }
+        debugCheckpoint("GameData.load:default")
         return GameData()
     }
     func save() {
