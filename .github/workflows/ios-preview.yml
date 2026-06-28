@@ -33,6 +33,12 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Ad-hoc sign simulator app
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          echo "Signing: $APP_PATH"
+          codesign --force --sign - "$APP_PATH"
+
       - name: Verify simulator binary architecture
         run: |
           APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
