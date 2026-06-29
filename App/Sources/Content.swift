@@ -134,6 +134,7 @@ enum Content {
 
     // MARK: - Procedural vertical layout
     static func layout(roomId: String, day: Int, screen: CGSize, floorY: CGFloat) -> LevelLayout {
+        debugCheckpoint("layout:start \(roomId) d\(day)")
         let ri = roomIndex(roomId)
         let r = room(roomId)
         var rng = SeededRNG(seed: UInt64(ri * 1000 + day * 7 + 1))
@@ -192,6 +193,7 @@ enum Content {
         }
 
         let worldHeight = max(screen.height, floorY + maxTopY + 200)
+        debugCheckpoint("layout:done p\(plats.count) l\(links.count)")
         return LevelLayout(worldWidth: worldWidth, worldHeight: worldHeight, floorY: floorY,
                            platforms: plats, links: links, placements: placements)
     }

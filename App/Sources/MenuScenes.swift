@@ -4,11 +4,12 @@ import UIKit
 // MARK: - Main Menu
 final class MenuScene: BaseScene {
     override func build() {
-        debugCheckpoint("MenuScene.build:start")
+        debugCheckpoint("MenuScene.build:start size:\(Int(size.width))x\(Int(size.height))")
         addRoomBackground(Palette.wall)
         // ambient floor strip
         let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: size.width, height: size.height * 0.22))
         floor.anchorPoint = .zero; floor.position = .zero; floor.zPosition = -90; addChild(floor)
+        debugCheckpoint("MenuScene.build:bg")
 
         let title = makeLabel("Bad Cat", size: 56, color: Palette.ink, weight: .black)
         title.position = CGPoint(x: size.width/2, y: size.height - topInset - 90)
@@ -16,12 +17,14 @@ final class MenuScene: BaseScene {
         let sub = makeLabel("STARRING MAC", size: 15, color: Palette.inkSoft, weight: .bold)
         sub.position = CGPoint(x: size.width/2, y: size.height - topInset - 120)
         addChild(sub)
+        debugCheckpoint("MenuScene.build:labels")
 
         // Mac preview
         let mac = CatNode()
         mac.baseScale = 2.0
         mac.position = CGPoint(x: size.width/2, y: size.height * 0.40)
         addChild(mac)
+        debugCheckpoint("MenuScene.build:cat")
 
         let playW = min(260, size.width - 80)
         let play = ButtonNode("Play", size: CGSize(width: playW, height: 60), fill: Palette.ink, fontSize: 22)
@@ -40,6 +43,7 @@ final class MenuScene: BaseScene {
         let last = UserDefaults.standard.string(forKey: "macbadcat.lastCheckpoint") ?? "(none)"
         let cp = makeLabel("chk: \(last)", size: 10, color: Palette.inkSoft, weight: .regular)
         cp.position = CGPoint(x: size.width/2, y: 18); cp.zPosition = 120; addChild(cp)
+        debugCheckpoint("MenuScene.build:done")
     }
 
     private func addSoundToggle() {

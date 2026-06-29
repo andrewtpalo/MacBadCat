@@ -175,6 +175,7 @@ final class GameScene: BaseScene {
     required init?(coder: NSCoder) { fatalError() }
 
     override func build() {
+        debugCheckpoint("Game.build:start \(roomId) d\(day)")
         if size.width <= 0 || size.height <= 0 { size = CGSize(width: 390, height: 844) }
         backgroundColor = room.wall
         let d = GameData.shared
@@ -189,25 +190,29 @@ final class GameScene: BaseScene {
         worldWidth = layout.worldWidth
         worldHeight = layout.worldHeight
         buildAdjacency()
+        debugCheckpoint("Game.build:layout")
 
         world = SKNode(); addChild(world)
-        buildRoom()
-        buildPlatforms()
-        buildBowls()
-        buildBreakables()
+        buildRoom();        debugCheckpoint("Game.build:room")
+        buildPlatforms();   debugCheckpoint("Game.build:platforms")
+        buildBowls();       debugCheckpoint("Game.build:bowls")
+        buildBreakables();  debugCheckpoint("Game.build:breakables")
 
         human.position = CGPoint(x: min(worldWidth - 70, size.width * 0.86), y: floorY)
         human.setScale(min(1.1, size.width / 390))
         world.addChild(human)
+        debugCheckpoint("Game.build:human")
 
         cat.position = CGPoint(x: worldWidth * 0.42, y: floorY)
         cat.baseScale = min(1.12, size.width / 360)
         catPlatform = 0
         world.addChild(cat)
+        debugCheckpoint("Game.build:cat")
 
-        buildHUD()
+        buildHUD();         debugCheckpoint("Game.build:hud")
         setGaze(.distract)
         updateCamera()
+        debugCheckpoint("Game.build:done")
     }
 
     private func buildAdjacency() {
@@ -497,7 +502,7 @@ final class GameScene: BaseScene {
 
     // MARK: loop
     override func update(_ currentTime: TimeInterval) {
-        if lastTime == 0 { lastTime = currentTime }
+        if lastTime == 0 { lastTime = currentTime; debugCheckpoint("Game.update:first") }
         var dt = currentTime - lastTime; lastTime = currentTime
         dt = min(dt, 0.05)
         if ended { return }

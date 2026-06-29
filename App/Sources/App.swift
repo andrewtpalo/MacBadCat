@@ -23,19 +23,59 @@ struct MacBadCatApp: App {
 }
 
 struct GameContainerView: View {
+    // TEMPORARY crash-diagnostic gate: a pure-SwiftUI screen that renders BEFORE any
+    // SpriteKit scene exists, so if the scene crashes on launch we can still read the
+    // last checkpoint from the previous run. Remove once the launch crash is fixed.
+    @State private var playing = false
+
     var body: some View {
-        GeometryReader { geo in
-            SpriteView(scene: makeScene(geo.size))
-                .ignoresSafeArea()
-                .onAppear {
-                    debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
-                }
+        if playing {
+            GeometryReader { geo in
+                SpriteView(scene: makeScene(geo.size))
+                    .ignoresSafeArea()
+            }
+        } else {
+            LaunchGate { debugCheckpoint("gate:play-tapped"); playing = true }
         }
     }
+
     private func makeScene(_ size: CGSize) -> SKScene {
+        debugCheckpoint("makeScene:enter \(Int(size.width))x\(Int(size.height))")
         let s = MenuScene(size: size.width > 0 ? size : CGSize(width: 390, height: 844))
         s.scaleMode = .resizeFill
+        debugCheckpoint("makeScene:created")
         return s
+    }
+}
+
+struct LaunchGate: View {
+    let onPlay: () -> Void
+    var body: some View {
+        let last = UserDefaults.standard.string(forKey: "macbadcat.lastCheckpoint") ?? "(none)"
+        ZStack {
+            Color(red: 0.71, green: 0.75, blue: 0.65).ignoresSafeArea()
+            VStack(spacing: 22) {
+                Text("Bad Cat")
+                    .font(.system(size: 52, weight: .black, design: .rounded))
+                    .foregroundColor(Color(red: 0.29, green: 0.21, blue: 0.15))
+                Text("last checkpoint")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(red: 0.48, green: 0.39, blue: 0.32))
+                Text(last)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(Color(red: 0.29, green: 0.21, blue: 0.15))
+                    .padding(.horizontal, 24)
+                Button(action: onPlay) {
+                    Text("Play")
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 64).padding(.vertical, 16)
+                        .background(Color(red: 0.29, green: 0.21, blue: 0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                }
+            }
+        }
     }
 }
 
