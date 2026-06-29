@@ -1,5 +1,6 @@
 import SwiftUI
 import SpriteKit
+import UIKit
 import AudioToolbox
 
 // Simple persistent checkpoint helper for crash tracing.
@@ -30,23 +31,30 @@ struct GameContainerView: View {
 
     var body: some View {
         if playing {
-            SpriteView(scene: GameContainerView.menuScene)
-                .ignoresSafeArea()
+            SpriteHost().ignoresSafeArea()
         } else {
             LaunchGate { debugCheckpoint("gate:play-tapped"); playing = true }
         }
     }
+}
 
-    // Create the menu scene EXACTLY ONCE for the app's lifetime. `resizeFill` adapts it to
-    // the real view size, so we don't need GeometryReader — whose constant re-evaluation was
-    // rebuilding a fresh SKScene on every layout pass and churning SpriteView's presentation.
-    static let menuScene: MenuScene = {
-        debugCheckpoint("menuScene:make")
-        let s = MenuScene(size: CGSize(width: 390, height: 844))
-        s.scaleMode = .resizeFill
-        debugCheckpoint("menuScene:made")
-        return s
-    }()
+/// Hosts an SKView directly so we control scene presentation precisely: the view is created
+/// once and the scene presented once, avoiding SwiftUI SpriteView's re-presentation lifecycle.
+struct SpriteHost: UIViewRepresentable {
+    func makeUIView(context: Context) -> SKView {
+        debugCheckpoint("SpriteHost:make")
+        let bounds = UIScreen.main.bounds
+        let v = SKView(frame: bounds)
+        v.ignoresSiblingOrder = true
+        let sz = bounds.width > 0 ? bounds.size : CGSize(width: 390, height: 844)
+        let scene = MenuScene(size: sz)
+        scene.scaleMode = .resizeFill
+        debugCheckpoint("SpriteHost:present")
+        v.presentScene(scene)
+        debugCheckpoint("SpriteHost:presented")
+        return v
+    }
+    func updateUIView(_ uiView: SKView, context: Context) {}
 }
 
 struct LaunchGate: View {
