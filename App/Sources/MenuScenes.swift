@@ -63,6 +63,7 @@ final class RoomSelectScene: BaseScene {
     private var coinLabel: SKLabelNode?
 
     override func build() {
+        debugCheckpoint("Room.build:start")
         addRoomBackground(Palette.wall)
         addBackButton { [weak self] in guard let s = self else { return }
             s.navigate(to: MenuScene(size: s.size), .push(with: .right, duration: 0.32)) }
@@ -70,7 +71,9 @@ final class RoomSelectScene: BaseScene {
         let title = makeLabel("Pick a room", size: 26, color: Palette.ink, weight: .heavy)
         title.position = CGPoint(x: size.width/2, y: size.height - topInset - 64)
         addChild(title)
+        debugCheckpoint("Room.build:title")
         layoutRooms()
+        debugCheckpoint("Room.build:done")
     }
 
     private func layoutRooms() {
@@ -84,7 +87,9 @@ final class RoomSelectScene: BaseScene {
             card.addChild(panel)
             let unlocked = GameData.shared.roomUnlocked(room.id)
 
+            debugCheckpoint("Room.preEmoji:\(room.id)")
             let emoji = makeLabel(room.emoji, size: 34); emoji.position = CGPoint(x: -cardW/2 + 38, y: 4); card.addChild(emoji)
+            debugCheckpoint("Room.postEmoji:\(room.id)")
             let nm = makeLabel(room.name, size: 19, color: Palette.ink, weight: .heavy, h: .left)
             nm.position = CGPoint(x: -cardW/2 + 70, y: 14); card.addChild(nm)
             let starsTotal = GameData.shared.totalStars(room: room.id, days: room.days)
