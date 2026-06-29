@@ -4,7 +4,7 @@ import UIKit
 // MARK: - Main Menu
 final class MenuScene: BaseScene {
     override func build() {
-        debugCheckpoint("MenuScene.build:start size:\(Int(size.width))x\(Int(size.height))")
+        debugCheckpoint("MenuScene.build:start")
         addRoomBackground(Palette.wall)
         // ambient floor strip
         let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: size.width, height: size.height * 0.22))

@@ -30,22 +30,23 @@ struct GameContainerView: View {
 
     var body: some View {
         if playing {
-            GeometryReader { geo in
-                SpriteView(scene: makeScene(geo.size))
-                    .ignoresSafeArea()
-            }
+            SpriteView(scene: GameContainerView.menuScene)
+                .ignoresSafeArea()
         } else {
             LaunchGate { debugCheckpoint("gate:play-tapped"); playing = true }
         }
     }
 
-    private func makeScene(_ size: CGSize) -> SKScene {
-        debugCheckpoint("makeScene:enter \(Int(size.width))x\(Int(size.height))")
-        let s = MenuScene(size: size.width > 0 ? size : CGSize(width: 390, height: 844))
+    // Create the menu scene EXACTLY ONCE for the app's lifetime. `resizeFill` adapts it to
+    // the real view size, so we don't need GeometryReader — whose constant re-evaluation was
+    // rebuilding a fresh SKScene on every layout pass and churning SpriteView's presentation.
+    static let menuScene: MenuScene = {
+        debugCheckpoint("menuScene:make")
+        let s = MenuScene(size: CGSize(width: 390, height: 844))
         s.scaleMode = .resizeFill
-        debugCheckpoint("makeScene:created")
+        debugCheckpoint("menuScene:made")
         return s
-    }
+    }()
 }
 
 struct LaunchGate: View {
@@ -99,6 +100,7 @@ class BaseScene: SKScene {
     var bottomInset: CGFloat { view?.safeAreaInsets.bottom ?? 12 }
 
     override func didMove(to view: SKView) {
+        debugCheckpoint("didMove:\(type(of: self))")
         anchorPoint = .zero
         build()
     }
