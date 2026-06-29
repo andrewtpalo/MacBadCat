@@ -25,10 +25,11 @@ struct MacBadCatApp: App {
 struct GameContainerView: View {
     var body: some View {
         GeometryReader { geo in
-            // record checkpoint before creating the main scene
-            debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
             SpriteView(scene: makeScene(geo.size))
                 .ignoresSafeArea()
+                .onAppear {
+                    debugCheckpoint("MakeScene: size:\(geo.size.width)x\(geo.size.height)")
+                }
         }
     }
     private func makeScene(_ size: CGSize) -> SKScene {

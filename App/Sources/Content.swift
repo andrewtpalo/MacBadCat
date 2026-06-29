@@ -22,6 +22,52 @@ struct RoomDef {
     let breakables: [Breakable]
 }
 
+// MARK: - Vertical level layout
+
+/// A horizontal surface the cat can stand and walk on. `topY` is height above the floor (0 = floor).
+struct PlatformDef {
+    let id: Int
+    let cx: CGFloat      // center x in world space
+    let topY: CGFloat    // surface height above floor, in points
+    let width: CGFloat
+}
+
+/// A climb connection between a `lower` and `upper` platform, performed at world x `x`.
+struct LinkDef {
+    let lower: Int
+    let upper: Int
+    let x: CGFloat
+}
+
+/// A breakable placed on a platform, with a value multiplier scaled by height.
+struct Placement {
+    let def: Breakable
+    let platform: Int
+    let x: CGFloat
+    let mult: CGFloat
+}
+
+struct LevelLayout {
+    let worldWidth: CGFloat
+    let worldHeight: CGFloat
+    let floorY: CGFloat
+    let platforms: [PlatformDef]   // index == id (ids are contiguous from 0)
+    let links: [LinkDef]
+    let placements: [Placement]
+}
+
+/// Small deterministic xorshift RNG so each room/day generates a stable layout.
+struct SeededRNG: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed != 0 ? seed : 0x9E3779B97F4A7C15 }
+    mutating func next() -> UInt64 {
+        state ^= state << 13
+        state ^= state >> 7
+        state ^= state << 17
+        return state
+    }
+}
+
 enum ShopKind { case skin, upgrade }
 
 struct ShopItem {
@@ -85,6 +131,70 @@ enum Content {
 
     static func room(_ id: String) -> RoomDef { rooms.first { $0.id == id } ?? rooms[0] }
     static func roomIndex(_ id: String) -> Int { rooms.firstIndex { $0.id == id } ?? 0 }
+
+    // MARK: - Procedural vertical layout
+    static func layout(roomId: String, day: Int, screen: CGSize, floorY: CGFloat) -> LevelLayout {
+        let ri = roomIndex(roomId)
+        let r = room(roomId)
+        var rng = SeededRNG(seed: UInt64(ri * 1000 + day * 7 + 1))
+
+        // More platforms and wider rooms deeper in / later days.
+        let tiers = min(7, 3 + day + ri / 2)
+        let tierStep: CGFloat = 92
+        let usableH = max(screen.height, 700)
+        let worldWidth = max(screen.width + 40, screen.width * (1.55 + CGFloat(day) * 0.12 + CGFloat(ri) * 0.12))
+
+        var plats: [PlatformDef] = [PlatformDef(id: 0, cx: worldWidth / 2, topY: 0, width: worldWidth)]
+        var links: [LinkDef] = []
+        // Cap stack height so it stays a touch below the top of the world.
+        let maxTopY = min(CGFloat(tiers) * tierStep, usableH - floorY - 180)
+
+        for i in 1...tiers {
+            let candidates = plats.filter { $0.topY <= maxTopY - tierStep + 1 }
+            let parent = candidates.randomElement(using: &rng) ?? plats[0]
+            let newTopY = parent.topY + tierStep
+            let width = CGFloat.random(in: 96...148, using: &rng)
+            var cx: CGFloat
+            if parent.id == 0 {
+                // floor spans the whole room, so spread first-tier platforms across the width
+                cx = CGFloat.random(in: (width / 2 + 24)...(worldWidth - width / 2 - 24), using: &rng)
+            } else {
+                let maxOffset = max(40, min(96, (parent.width / 2 + width / 2) - 34))
+                let off = CGFloat.random(in: 34...maxOffset, using: &rng)
+                let dir: CGFloat = Bool.random(using: &rng) ? 1 : -1
+                cx = min(max(parent.cx + dir * off, width / 2 + 16), worldWidth - width / 2 - 16)
+            }
+
+            // Guarantee enough horizontal overlap so the cat can stand on both at the climb point.
+            var l = max(parent.cx - parent.width / 2, cx - width / 2)
+            var rr = min(parent.cx + parent.width / 2, cx + width / 2)
+            if rr - l < 26 {
+                cx = min(max(parent.cx, width / 2 + 16), worldWidth - width / 2 - 16)
+                l = max(parent.cx - parent.width / 2, cx - width / 2)
+                rr = min(parent.cx + parent.width / 2, cx + width / 2)
+            }
+            plats.append(PlatformDef(id: i, cx: cx, topY: newTopY, width: width))
+            links.append(LinkDef(lower: parent.id, upper: i, x: (l + rr) / 2))
+        }
+
+        // Place targets: a couple on the floor (easy), one on every elevated platform (climb = reward).
+        var placements: [Placement] = []
+        let bks = r.breakables
+        var bi = 0
+        for fx in [worldWidth * 0.28, worldWidth * 0.60] where bi < bks.count {
+            placements.append(Placement(def: bks[bi], platform: 0, x: fx, mult: 1.0))
+            bi += 1
+        }
+        for p in plats where p.id != 0 {
+            let def = bks[bi % max(1, bks.count)]; bi += 1
+            let tier = p.topY / tierStep
+            placements.append(Placement(def: def, platform: p.id, x: p.cx, mult: 1.0 + tier * 0.3))
+        }
+
+        let worldHeight = max(screen.height, floorY + maxTopY + 200)
+        return LevelLayout(worldWidth: worldWidth, worldHeight: worldHeight, floorY: floorY,
+                           platforms: plats, links: links, placements: placements)
+    }
 
     // MARK: shop
     static let skins: [ShopItem] = [
