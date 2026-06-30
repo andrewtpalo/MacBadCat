@@ -19,6 +19,19 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Ensure Metal toolchain is available
+        run: |
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          # Xcode 16.3+ ships the Metal compiler as a separately-downloadable component.
+          # Without it nothing can produce default.metallib and SpriteKit crashes at first render.
+          xcodebuild -downloadComponent MetalToolchain || echo "(-downloadComponent unsupported or already present)"
+          echo "=== metal compiler check ==="
+          if xcrun -sdk iphonesimulator metal --version; then
+            echo "RESULT: metal compiler IS available"
+          else
+            echo "RESULT: metal compiler NOT available on this runner"
+          fi
+
       - name: Generate Xcode project
         run: xcodegen generate
 
