@@ -26,30 +26,28 @@ struct GameContainerView: View {
     }
 }
 
-/// Hosts an SKView directly and presents the menu scene ONCE, at the real view size, as soon
-/// as the view has been laid out — so everything is sized to the actual screen.
-struct SpriteHost: UIViewRepresentable {
-    final class Coordinator { var presented = false }
-    func makeCoordinator() -> Coordinator { Coordinator() }
+/// An SKView that presents the menu scene the moment UIKit gives it a real size, via
+/// layoutSubviews (which is reliably called once laid out). Presenting at the real bounds
+/// means the scene builds at the actual screen size — true dynamic sizing.
+final class HostSKView: SKView {
+    private var didPresent = false
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !didPresent, bounds.width > 1, bounds.height > 1 else { return }
+        didPresent = true
+        let scene = MenuScene(size: bounds.size)
+        scene.scaleMode = .resizeFill
+        presentScene(scene)
+    }
+}
 
+struct SpriteHost: UIViewRepresentable {
     func makeUIView(context: Context) -> SKView {
-        let v = SKView(frame: .zero)
+        let v = HostSKView(frame: .zero)
         v.ignoresSiblingOrder = true
         return v
     }
-
-    func updateUIView(_ v: SKView, context: Context) {
-        let b = v.bounds.size
-        guard b.width > 1, b.height > 1 else { return }
-        if !context.coordinator.presented {
-            context.coordinator.presented = true
-            let scene = MenuScene(size: b)
-            scene.scaleMode = .resizeFill
-            v.presentScene(scene)
-        } else if let s = v.scene, s.size != b {
-            s.size = b
-        }
-    }
+    func updateUIView(_ v: SKView, context: Context) {}
 }
 
 // Audio kept tiny via optional system sounds.
