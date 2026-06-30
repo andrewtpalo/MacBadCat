@@ -43,18 +43,24 @@ struct GameContainerView: View {
 struct SpriteHost: UIViewRepresentable {
     func makeUIView(context: Context) -> SKView {
         debugCheckpoint("SpriteHost:make")
-        let bounds = UIScreen.main.bounds
-        let v = SKView(frame: bounds)
+        // No UIScreen.main (deprecated / flaky on iOS 18 sim). Use a default size; the real
+        // size is applied in updateUIView once the view is laid out, and resizeFill adapts.
+        let v = SKView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        debugCheckpoint("SpriteHost:skview")
         v.ignoresSiblingOrder = true
-        let sz = bounds.width > 0 ? bounds.size : CGSize(width: 390, height: 844)
-        let scene = MenuScene(size: sz)
+        let scene = MenuScene(size: CGSize(width: 390, height: 844))
         scene.scaleMode = .resizeFill
-        debugCheckpoint("SpriteHost:present")
+        debugCheckpoint("SpriteHost:scene")
         v.presentScene(scene)
         debugCheckpoint("SpriteHost:presented")
         return v
     }
-    func updateUIView(_ uiView: SKView, context: Context) {}
+    func updateUIView(_ uiView: SKView, context: Context) {
+        let b = uiView.bounds.size
+        if b.width > 1, b.height > 1, let s = uiView.scene, s.size != b {
+            s.size = b
+        }
+    }
 }
 
 struct LaunchGate: View {
