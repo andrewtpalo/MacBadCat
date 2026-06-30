@@ -47,6 +47,11 @@ struct Placement {
     let mult: CGFloat
 }
 
+struct Spot {
+    let platform: Int
+    let x: CGFloat
+}
+
 struct LevelLayout {
     let worldWidth: CGFloat
     let worldHeight: CGFloat
@@ -54,6 +59,8 @@ struct LevelLayout {
     let platforms: [PlatformDef]   // index == id (ids are contiguous from 0)
     let links: [LinkDef]
     let placements: [Placement]
+    let lootSpots: [Spot]
+    let humanSpots: [Spot]
 }
 
 /// Small deterministic xorshift RNG so each room/day generates a stable layout.
@@ -134,27 +141,26 @@ enum Content {
 
     // MARK: - Procedural vertical layout
     static func layout(roomId: String, day: Int, screen: CGSize, floorY: CGFloat) -> LevelLayout {
-        debugCheckpoint("layout:start \(roomId) d\(day)")
         let ri = roomIndex(roomId)
         let r = room(roomId)
         var rng = SeededRNG(seed: UInt64(ri * 1000 + day * 7 + 1))
 
-        // More platforms and wider rooms deeper in / later days.
-        let tiers = min(7, 3 + day + ri / 2)
-        let tierStep: CGFloat = 92
-        let usableH = max(screen.height, 700)
-        let worldWidth = max(screen.width + 40, screen.width * (1.55 + CGFloat(day) * 0.12 + CGFloat(ri) * 0.12))
+        // More platforms and wider, taller rooms deeper in / later days.
+        let tiers = min(9, 4 + day + ri / 2)
+        let tierStep: CGFloat = 104
+        // Build a world that's meaningfully taller than the screen so verticality matters.
+        let stackH = CGFloat(tiers) * tierStep
+        let worldWidth = max(screen.width + 40, screen.width * (1.7 + CGFloat(day) * 0.14 + CGFloat(ri) * 0.14))
 
         var plats: [PlatformDef] = [PlatformDef(id: 0, cx: worldWidth / 2, topY: 0, width: worldWidth)]
         var links: [LinkDef] = []
-        // Cap stack height so it stays a touch below the top of the world.
-        let maxTopY = min(CGFloat(tiers) * tierStep, usableH - floorY - 180)
+        let maxTopY = stackH
 
         for i in 1...tiers {
             let candidates = plats.filter { $0.topY <= maxTopY - tierStep + 1 }
             let parent = candidates.randomElement(using: &rng) ?? plats[0]
             let newTopY = parent.topY + tierStep
-            let width = CGFloat.random(in: 96...148, using: &rng)
+            let width = CGFloat.random(in: 120...182, using: &rng)
             var cx: CGFloat
             if parent.id == 0 {
                 // floor spans the whole room, so spread first-tier platforms across the width
@@ -178,24 +184,51 @@ enum Content {
             links.append(LinkDef(lower: parent.id, upper: i, x: (l + rr) / 2))
         }
 
-        // Place targets: a couple on the floor (easy), one on every elevated platform (climb = reward).
+        // Sort elevated platforms by height so we can reason about "low vs high".
+        let elevated = plats.filter { $0.id != 0 }.sorted { $0.topY < $1.topY }
+        let topTierY = elevated.last?.topY ?? tierStep
+
+        // Place targets. Value scales steeply with height so climbing high is the real payoff.
         var placements: [Placement] = []
         let bks = r.breakables
         var bi = 0
-        for fx in [worldWidth * 0.28, worldWidth * 0.60] where bi < bks.count {
+        // A few low, easy targets on the floor, well separated.
+        for fx in [worldWidth * 0.22, worldWidth * 0.5, worldWidth * 0.78] where bi < bks.count {
             placements.append(Placement(def: bks[bi], platform: 0, x: fx, mult: 1.0))
             bi += 1
         }
-        for p in plats where p.id != 0 {
+        for p in elevated {
             let def = bks[bi % max(1, bks.count)]; bi += 1
-            let tier = p.topY / tierStep
-            placements.append(Placement(def: def, platform: p.id, x: p.cx, mult: 1.0 + tier * 0.3))
+            let h = p.topY / max(1, topTierY)        // 0..1 normalized height
+            placements.append(Placement(def: def, platform: p.id, x: p.cx, mult: 1.0 + h * 1.6))
         }
 
-        let worldHeight = max(screen.height, floorY + maxTopY + 200)
-        debugCheckpoint("layout:done p\(plats.count) l\(links.count)")
+        // Loot boxes: on the upper half of the stack (climbing reward). Higher = richer (handled in scene).
+        var lootSpots: [Spot] = []
+        for p in elevated where p.topY >= topTierY * 0.5 {
+            if Double.random(in: 0...1, using: &rng) < 0.55 {
+                lootSpots.append(Spot(platform: p.id, x: p.cx + CGFloat.random(in: -p.width/3...p.width/3, using: &rng)))
+            }
+        }
+        if lootSpots.isEmpty, let top = elevated.last {
+            lootSpots.append(Spot(platform: top.id, x: top.cx))
+        }
+
+        // Watchers: always one on the floor; add more up high on harder days/rooms so the
+        // juiciest top targets are guarded.
+        var humanSpots: [Spot] = [Spot(platform: 0, x: worldWidth * 0.86)]
+        let extraWatchers = min(3, (day + ri) / 2)
+        let upperHalf = elevated.filter { $0.topY >= topTierY * 0.45 }
+        for _ in 0..<extraWatchers {
+            if let p = upperHalf.randomElement(using: &rng) {
+                humanSpots.append(Spot(platform: p.id, x: p.cx))
+            }
+        }
+
+        let worldHeight = max(screen.height, floorY + maxTopY + 220)
         return LevelLayout(worldWidth: worldWidth, worldHeight: worldHeight, floorY: floorY,
-                           platforms: plats, links: links, placements: placements)
+                           platforms: plats, links: links, placements: placements,
+                           lootSpots: lootSpots, humanSpots: humanSpots)
     }
 
     // MARK: shop

@@ -1,15 +1,11 @@
 import SwiftUI
 import SpriteKit
 import UIKit
-import Metal
 import AudioToolbox
 
-// Simple persistent checkpoint helper for crash tracing.
+// Lightweight persistent breadcrumb (kept for any future crash tracing; harmless).
 func debugCheckpoint(_ s: String) {
     UserDefaults.standard.set(s, forKey: "macbadcat.lastCheckpoint")
-    // Ensure it's written quickly.
-    UserDefaults.standard.synchronize()
-
 }
 
 @main
@@ -25,87 +21,33 @@ struct MacBadCatApp: App {
 }
 
 struct GameContainerView: View {
-    // TEMPORARY crash-diagnostic gate: a pure-SwiftUI screen that renders BEFORE any
-    // SpriteKit scene exists, so if the scene crashes on launch we can still read the
-    // last checkpoint from the previous run. Remove once the launch crash is fixed.
-    @State private var playing = false
-
     var body: some View {
-        if playing {
-            SpriteHost().ignoresSafeArea()
-        } else {
-            LaunchGate { debugCheckpoint("gate:play-tapped"); playing = true }
-        }
+        SpriteHost().ignoresSafeArea()
     }
 }
 
-/// Hosts an SKView directly so we control scene presentation precisely: the view is created
-/// once and the scene presented once, avoiding SwiftUI SpriteView's re-presentation lifecycle.
+/// Hosts an SKView directly and presents the menu scene ONCE, at the real view size, as soon
+/// as the view has been laid out — so everything is sized to the actual screen.
 struct SpriteHost: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        // SpriteKit REQUIRES a Metal device — it has no software fallback. If the simulator
-        // has no GPU device, creating an SKView crashes. Detect that and show a message
-        // instead of crashing, so we can confirm the cause.
-        let hasMetal = (MTLCreateSystemDefaultDevice() != nil)
-        debugCheckpoint("SpriteHost:make metal=\(hasMetal)")
-        guard hasMetal else {
-            debugCheckpoint("SpriteHost:NO-METAL")
-            let label = PaddedLabel()
-            label.text = "This environment has no Metal GPU,\nso SpriteKit can't render.\n(The game logic is fine — it needs a\nMetal-capable simulator/device.)"
-            label.numberOfLines = 0
-            label.textAlignment = .center
-            label.textColor = UIColor(hex: 0x4A3526)
-            label.backgroundColor = UIColor(hex: 0xB6BFA6)
-            label.font = .systemFont(ofSize: 16, weight: .semibold)
-            return label
-        }
-        let v = SKView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        debugCheckpoint("SpriteHost:skview")
+    final class Coordinator { var presented = false }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> SKView {
+        let v = SKView(frame: .zero)
         v.ignoresSiblingOrder = true
-        let scene = MenuScene(size: CGSize(width: 390, height: 844))
-        scene.scaleMode = .resizeFill
-        debugCheckpoint("SpriteHost:scene")
-        v.presentScene(scene)
-        debugCheckpoint("SpriteHost:presented")
         return v
     }
-    func updateUIView(_ uiView: UIView, context: Context) {
-        guard let v = uiView as? SKView else { return }
+
+    func updateUIView(_ v: SKView, context: Context) {
         let b = v.bounds.size
-        if b.width > 1, b.height > 1, let s = v.scene, s.size != b { s.size = b }
-    }
-}
-
-/// Plain UILabel that fills available space (used only for the no-Metal fallback message).
-final class PaddedLabel: UILabel {}
-
-struct LaunchGate: View {
-    let onPlay: () -> Void
-    var body: some View {
-        let last = UserDefaults.standard.string(forKey: "macbadcat.lastCheckpoint") ?? "(none)"
-        ZStack {
-            Color(red: 0.71, green: 0.75, blue: 0.65).ignoresSafeArea()
-            VStack(spacing: 22) {
-                Text("Bad Cat")
-                    .font(.system(size: 52, weight: .black, design: .rounded))
-                    .foregroundColor(Color(red: 0.29, green: 0.21, blue: 0.15))
-                Text("last checkpoint")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(red: 0.48, green: 0.39, blue: 0.32))
-                Text(last)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(Color(red: 0.29, green: 0.21, blue: 0.15))
-                    .padding(.horizontal, 24)
-                Button(action: onPlay) {
-                    Text("Play")
-                        .font(.system(size: 22, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 64).padding(.vertical, 16)
-                        .background(Color(red: 0.29, green: 0.21, blue: 0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                }
-            }
+        guard b.width > 1, b.height > 1 else { return }
+        if !context.coordinator.presented {
+            context.coordinator.presented = true
+            let scene = MenuScene(size: b)
+            scene.scaleMode = .resizeFill
+            v.presentScene(scene)
+        } else if let s = v.scene, s.size != b {
+            s.size = b
         }
     }
 }

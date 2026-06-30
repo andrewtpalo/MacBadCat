@@ -4,46 +4,47 @@ import UIKit
 // MARK: - Main Menu
 final class MenuScene: BaseScene {
     override func build() {
-        debugCheckpoint("MenuScene.build:start")
+        let W = size.width, H = size.height
         addRoomBackground(Palette.wall)
-        // ambient floor strip
-        let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: size.width, height: size.height * 0.22))
+
+        // Floor + rug for depth.
+        let floorH = H * 0.30
+        let floor = SKSpriteNode(color: Palette.wood, size: CGSize(width: W, height: floorH))
         floor.anchorPoint = .zero; floor.position = .zero; floor.zPosition = -90; addChild(floor)
-        debugCheckpoint("MenuScene.build:bg")
+        let rug = SKShapeNode(ellipseOf: CGSize(width: W * 0.7, height: floorH * 0.5))
+        rug.fillColor = UIColor(hex: 0xC98A2E, alpha: 0.30); rug.strokeColor = .clear
+        rug.position = CGPoint(x: W/2, y: floorH * 0.5); rug.zPosition = -88; addChild(rug)
 
-        let title = makeLabel("Bad Cat", size: 56, color: Palette.ink, weight: .black)
-        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 90)
-        addChild(title)
-        let sub = makeLabel("STARRING MAC", size: 15, color: Palette.inkSoft, weight: .bold)
-        sub.position = CGPoint(x: size.width/2, y: size.height - topInset - 120)
-        addChild(sub)
-        debugCheckpoint("MenuScene.build:labels")
+        // Title block, anchored from the top inset.
+        let titleY = H - topInset - H * 0.10
+        let title = makeLabel("Bad Cat", size: min(64, W * 0.17), color: Palette.ink, weight: .black)
+        title.position = CGPoint(x: W/2, y: titleY); addChild(title)
+        let sub = makeLabel("STARRING MAC", size: 14, color: Palette.inkSoft, weight: .heavy)
+        sub.position = CGPoint(x: W/2, y: titleY - title.frame.height/2 - 16); addChild(sub)
 
-        // Mac preview
+        // Mac preview, sat on the floor, scaled to the screen.
         let mac = CatNode()
-        mac.baseScale = 2.0
-        mac.position = CGPoint(x: size.width/2, y: size.height * 0.40)
+        mac.baseScale = max(1.8, min(3.0, W / 150))
+        mac.position = CGPoint(x: W/2, y: floorH + H * 0.10)
         addChild(mac)
-        debugCheckpoint("MenuScene.build:cat")
+        let shadow = SKShapeNode(ellipseOf: CGSize(width: 90, height: 22))
+        shadow.fillColor = UIColor(hex: 0x000000, alpha: 0.12); shadow.strokeColor = .clear
+        shadow.position = CGPoint(x: W/2, y: floorH + 6); shadow.zPosition = -10; addChild(shadow)
 
-        let playW = min(260, size.width - 80)
-        let play = ButtonNode("Play", size: CGSize(width: playW, height: 60), fill: Palette.ink, fontSize: 22)
-        play.position = CGPoint(x: size.width/2, y: size.height * 0.26)
+        // Buttons, stacked with even spacing in the lower third.
+        let btnW = min(300, W - 64)
+        let play = ButtonNode("Play", size: CGSize(width: btnW, height: 62), fill: Palette.ink, fontSize: 24)
+        play.position = CGPoint(x: W/2, y: floorH * 0.62)
         play.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: RoomSelectScene(size: s.size)) }
         addChild(play)
 
-        let shop = ButtonNode("Shop", size: CGSize(width: playW, height: 52), fill: Palette.flame, fontSize: 20)
-        shop.position = CGPoint(x: size.width/2, y: size.height * 0.26 - 72)
+        let shop = ButtonNode("Shop", size: CGSize(width: btnW, height: 54), fill: Palette.flame, fontSize: 20)
+        shop.position = CGPoint(x: W/2, y: floorH * 0.62 - 76)
         shop.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: ShopScene(size: s.size)) }
         addChild(shop)
 
         _ = addCoinChip()
         addSoundToggle()
-        // show last checkpoint for debugging
-        let last = UserDefaults.standard.string(forKey: "macbadcat.lastCheckpoint") ?? "(none)"
-        let cp = makeLabel("chk: \(last)", size: 10, color: Palette.inkSoft, weight: .regular)
-        cp.position = CGPoint(x: size.width/2, y: 18); cp.zPosition = 120; addChild(cp)
-        debugCheckpoint("MenuScene.build:done")
     }
 
     private func addSoundToggle() {
@@ -63,7 +64,6 @@ final class RoomSelectScene: BaseScene {
     private var coinLabel: SKLabelNode?
 
     override func build() {
-        debugCheckpoint("Room.build:start")
         addRoomBackground(Palette.wall)
         addBackButton { [weak self] in guard let s = self else { return }
             s.navigate(to: MenuScene(size: s.size), .push(with: .right, duration: 0.32)) }
@@ -71,9 +71,7 @@ final class RoomSelectScene: BaseScene {
         let title = makeLabel("Pick a room", size: 26, color: Palette.ink, weight: .heavy)
         title.position = CGPoint(x: size.width/2, y: size.height - topInset - 64)
         addChild(title)
-        debugCheckpoint("Room.build:title")
         layoutRooms()
-        debugCheckpoint("Room.build:done")
     }
 
     private func layoutRooms() {
@@ -87,9 +85,7 @@ final class RoomSelectScene: BaseScene {
             card.addChild(panel)
             let unlocked = GameData.shared.roomUnlocked(room.id)
 
-            debugCheckpoint("Room.preEmoji:\(room.id)")
             let emoji = makeLabel(room.emoji, size: 34); emoji.position = CGPoint(x: -cardW/2 + 38, y: 4); card.addChild(emoji)
-            debugCheckpoint("Room.postEmoji:\(room.id)")
             let nm = makeLabel(room.name, size: 19, color: Palette.ink, weight: .heavy, h: .left)
             nm.position = CGPoint(x: -cardW/2 + 70, y: 14); card.addChild(nm)
             let starsTotal = GameData.shared.totalStars(room: room.id, days: room.days)
