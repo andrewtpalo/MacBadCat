@@ -1,6 +1,7 @@
 import SwiftUI
 import SpriteKit
 import UIKit
+import Metal
 import AudioToolbox
 
 // Simple persistent checkpoint helper for crash tracing.
@@ -41,10 +42,23 @@ struct GameContainerView: View {
 /// Hosts an SKView directly so we control scene presentation precisely: the view is created
 /// once and the scene presented once, avoiding SwiftUI SpriteView's re-presentation lifecycle.
 struct SpriteHost: UIViewRepresentable {
-    func makeUIView(context: Context) -> SKView {
-        debugCheckpoint("SpriteHost:make")
-        // No UIScreen.main (deprecated / flaky on iOS 18 sim). Use a default size; the real
-        // size is applied in updateUIView once the view is laid out, and resizeFill adapts.
+    func makeUIView(context: Context) -> UIView {
+        // SpriteKit REQUIRES a Metal device — it has no software fallback. If the simulator
+        // has no GPU device, creating an SKView crashes. Detect that and show a message
+        // instead of crashing, so we can confirm the cause.
+        let hasMetal = (MTLCreateSystemDefaultDevice() != nil)
+        debugCheckpoint("SpriteHost:make metal=\(hasMetal)")
+        guard hasMetal else {
+            debugCheckpoint("SpriteHost:NO-METAL")
+            let label = PaddedLabel()
+            label.text = "This environment has no Metal GPU,\nso SpriteKit can't render.\n(The game logic is fine — it needs a\nMetal-capable simulator/device.)"
+            label.numberOfLines = 0
+            label.textAlignment = .center
+            label.textColor = UIColor(hex: 0x4A3526)
+            label.backgroundColor = UIColor(hex: 0xB6BFA6)
+            label.font = .systemFont(ofSize: 16, weight: .semibold)
+            return label
+        }
         let v = SKView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         debugCheckpoint("SpriteHost:skview")
         v.ignoresSiblingOrder = true
@@ -55,13 +69,15 @@ struct SpriteHost: UIViewRepresentable {
         debugCheckpoint("SpriteHost:presented")
         return v
     }
-    func updateUIView(_ uiView: SKView, context: Context) {
-        let b = uiView.bounds.size
-        if b.width > 1, b.height > 1, let s = uiView.scene, s.size != b {
-            s.size = b
-        }
+    func updateUIView(_ uiView: UIView, context: Context) {
+        guard let v = uiView as? SKView else { return }
+        let b = v.bounds.size
+        if b.width > 1, b.height > 1, let s = v.scene, s.size != b { s.size = b }
     }
 }
+
+/// Plain UILabel that fills available space (used only for the no-Metal fallback message).
+final class PaddedLabel: UILabel {}
 
 struct LaunchGate: View {
     let onPlay: () -> Void
