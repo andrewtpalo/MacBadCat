@@ -33,6 +33,34 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Check default.metallib is in the bundle
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          echo "=== App bundle: $APP_PATH ==="
+          ls -la "$APP_PATH"
+          echo "=== any .metallib in bundle ==="
+          find "$APP_PATH" -name "*.metallib" -print
+          if find "$APP_PATH" -name "default.metallib" | grep -q .; then
+            echo "RESULT: OK — default.metallib IS present"
+          else
+            echo "RESULT: MISSING — default.metallib is NOT in the bundle"
+          fi
+          echo "=== any .metallib anywhere in derived data ==="
+          find build -name "*.metallib" -print | head
+
+      - name: Ensure default.metallib exists (inject if missing)
+        run: |
+          APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
+          if find "$APP_PATH" -name "default.metallib" | grep -q .; then
+            echo "default.metallib already present — nothing to do"
+          else
+            echo "default.metallib MISSING — compiling and injecting one (SpriteKit needs it)"
+            xcrun -sdk iphonesimulator metal -c App/Sources/DefaultLibrary.metal -o "$RUNNER_TEMP/dummy.air"
+            xcrun -sdk iphonesimulator metallib "$RUNNER_TEMP/dummy.air" -o "$APP_PATH/default.metallib"
+            echo "Injected:"
+            ls -la "$APP_PATH/default.metallib"
+          fi
+
       - name: Ad-hoc sign simulator app
         run: |
           APP_PATH=$(find build/Build/Products/Debug-iphonesimulator -maxdepth 1 -name "*.app" | head -n 1)
