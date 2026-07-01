@@ -182,6 +182,9 @@ final class GameScene: BaseScene {
     // HUD
     private var energyBar: BarNode!
     private var suspBar: BarNode!
+    private var suspMeterBG: SKShapeNode!
+    private var alertGlow: SKShapeNode!
+    private var alertLabel: SKLabelNode!
     private var chaosLabel: SKLabelNode!
     private var coinLabel: SKLabelNode!
     private var dayBar: BarNode!
@@ -251,14 +254,36 @@ final class GameScene: BaseScene {
         floor.anchorPoint = .zero; floor.zPosition = -90; world.addChild(floor)
         let base = SKSpriteNode(color: Palette.woodDeep, size: CGSize(width: worldWidth, height: 6))
         base.anchorPoint = .zero; base.position = CGPoint(x: 0, y: floorY); base.zPosition = -89; world.addChild(base)
-        for wx in stride(from: size.width * 0.16, to: worldWidth, by: size.width * 0.66) {
-            let win = SKShapeNode(rect: CGRect(x: wx, y: floorY + 130, width: 100, height: 130), cornerRadius: 6)
+
+        // Windows along the wall — start past the left-corner feeding nook (bowls live there).
+        let winW: CGFloat = 108, winH: CGFloat = 134, winBottom = floorY + 118
+        var windowXs: [CGFloat] = []
+        var wx = worldWidth * 0.30
+        while wx < worldWidth - winW {
+            let win = SKShapeNode(rect: CGRect(x: wx - winW / 2, y: winBottom, width: winW, height: winH), cornerRadius: 6)
             win.fillColor = UIColor(hex: 0xBFE3F2); win.strokeColor = Palette.woodDeep; win.lineWidth = 5; win.zPosition = -80
             world.addChild(win)
+            let mull = SKShapeNode(rect: CGRect(x: wx - 2, y: winBottom, width: 4, height: winH))
+            mull.fillColor = Palette.woodDeep; mull.strokeColor = .clear; mull.zPosition = -79; world.addChild(mull)
+            windowXs.append(wx)
+            wx += max(size.width * 0.82, 280)
         }
-        sunbeam = SKShapeNode()
-        sunbeam.fillColor = Palette.sun; sunbeam.strokeColor = .clear; sunbeam.alpha = 0.34; sunbeam.zPosition = -70
-        world.addChild(sunbeam)
+
+        // A single sunbeam pours from ONE window onto the floor — the nap spot, far from the bowls.
+        sunX = windowXs.first ?? worldWidth * 0.34
+        let beam = SKShapeNode()
+        let bp = UIBezierPath()
+        bp.move(to: CGPoint(x: sunX - 46, y: winBottom))
+        bp.addLine(to: CGPoint(x: sunX + 46, y: winBottom))
+        bp.addLine(to: CGPoint(x: sunX + 82, y: floorY))
+        bp.addLine(to: CGPoint(x: sunX - 82, y: floorY))
+        bp.close()
+        beam.path = bp.cgPath; beam.fillColor = Palette.sun; beam.strokeColor = .clear; beam.alpha = 0.26; beam.zPosition = -70
+        world.addChild(beam)
+        let pool = SKShapeNode(ellipseOf: CGSize(width: 156, height: 30))
+        pool.fillColor = Palette.sun; pool.strokeColor = .clear; pool.alpha = 0.34
+        pool.position = CGPoint(x: sunX, y: floorY + 5); pool.zPosition = -69; world.addChild(pool)
+        sunbeam = beam
     }
 
     private func buildPlatforms() {
@@ -341,33 +366,47 @@ final class GameScene: BaseScene {
         coinLabel = makeLabel("\(GameData.shared.coins)", size: 16, color: Palette.ink, weight: .heavy, h: .left)
         coinLabel.position = CGPoint(x: -20, y: 0); coinChip.addChild(coinLabel)
 
-        bannerPanel = roundedPanel(CGSize(width: min(260, size.width - 40), height: 30), fill: UIColor(hex: 0xFBF6EE, alpha: 0.92), corner: 15)
-        bannerPanel.position = CGPoint(x: size.width / 2, y: size.height - topInset - 64); bannerPanel.zPosition = 60
+        // Prominent SUSPICION meter across the top, with alerting.
+        let sw = size.width - 56
+        suspMeterBG = roundedPanel(CGSize(width: sw + 18, height: 46), fill: UIColor(hex: 0xFBF6EE, alpha: 0.94), corner: 14)
+        suspMeterBG.position = CGPoint(x: size.width / 2, y: size.height - topInset - 72); suspMeterBG.zPosition = 61
+        addChild(suspMeterBG)
+        let sTitle = makeLabel("SUSPICION", size: 12, color: Palette.ink, weight: .black, h: .left)
+        sTitle.position = CGPoint(x: -sw / 2, y: 10); suspMeterBG.addChild(sTitle)
+        alertLabel = makeLabel("⚠ SPOTTED", size: 13, color: Palette.susp, weight: .black, h: .right)
+        alertLabel.position = CGPoint(x: sw / 2, y: 10); alertLabel.alpha = 0; suspMeterBG.addChild(alertLabel)
+        suspBar = BarNode(width: sw, height: 16, color: Palette.susp)
+        suspBar.position = CGPoint(x: -sw / 2, y: -10); suspMeterBG.addChild(suspBar)
+
+        // Full-screen red alert border (pulses when a watcher can see you).
+        alertGlow = SKShapeNode(rect: CGRect(x: 3, y: 3, width: size.width - 6, height: size.height - 6), cornerRadius: 8)
+        alertGlow.strokeColor = Palette.susp; alertGlow.lineWidth = 6; alertGlow.fillColor = .clear
+        alertGlow.zPosition = 90; alertGlow.alpha = 0; addChild(alertGlow)
+
+        bannerPanel = roundedPanel(CGSize(width: min(280, size.width - 30), height: 28), fill: UIColor(hex: 0xFBF6EE, alpha: 0.9), corner: 14)
+        bannerPanel.position = CGPoint(x: size.width / 2, y: size.height - topInset - 112); bannerPanel.zPosition = 60
         addChild(bannerPanel)
-        bannerLabel = makeLabel("", size: 14, color: Palette.inkSoft, weight: .heavy)
+        bannerLabel = makeLabel("", size: 13, color: Palette.inkSoft, weight: .heavy)
         bannerPanel.addChild(bannerLabel)
 
         comboLabel = makeLabel("", size: 22, color: Palette.flameDeep, weight: .black)
-        comboLabel.position = CGPoint(x: size.width / 2, y: size.height - topInset - 104); comboLabel.zPosition = 60
+        comboLabel.position = CGPoint(x: size.width / 2, y: size.height - topInset - 146); comboLabel.zPosition = 60
         addChild(comboLabel)
 
-        // Bottom HUD panel
+        // Bottom HUD panel — stamina + mischief + controls (suspicion now lives up top)
         let hud = roundedPanel(CGSize(width: size.width, height: hudHeight), fill: UIColor(hex: 0xA6B095, alpha: 0.96), corner: 0, shadow: false)
         hud.position = CGPoint(x: size.width / 2, y: hudHeight / 2); hud.zPosition = 55; addChild(hud)
 
-        let leftX = -size.width / 2 + 18
-        let barW = min(size.width * 0.36, 132)
-        energyBar = BarNode(width: barW, color: Palette.energy)
-        energyBar.position = CGPoint(x: leftX, y: 18); hud.addChild(energyBar)
-        let eLab = makeLabel("STAMINA", size: 10, color: Palette.ink, weight: .heavy, h: .left); eLab.position = CGPoint(x: leftX, y: 34); hud.addChild(eLab)
-        suspBar = BarNode(width: barW, color: Palette.susp)
-        suspBar.position = CGPoint(x: leftX, y: -16); hud.addChild(suspBar)
-        let sLab = makeLabel("SUSPICION", size: 10, color: Palette.ink, weight: .heavy, h: .left); sLab.position = CGPoint(x: leftX, y: 0); hud.addChild(sLab)
+        let leftX = -size.width / 2 + 20
+        let barW = min(size.width * 0.4, 150)
+        energyBar = BarNode(width: barW, height: 13, color: Palette.energy)
+        energyBar.position = CGPoint(x: leftX, y: 4); hud.addChild(energyBar)
+        let eLab = makeLabel("STAMINA", size: 11, color: Palette.ink, weight: .heavy, h: .left); eLab.position = CGPoint(x: leftX, y: 24); hud.addChild(eLab)
 
-        let chaosX = leftX + barW + 30
-        chaosLabel = makeLabel("0", size: 24, color: Palette.ink, weight: .black, h: .center)
-        chaosLabel.position = CGPoint(x: chaosX, y: 6); hud.addChild(chaosLabel)
-        let cLab = makeLabel("MISCHIEF", size: 9, color: Palette.ink, weight: .heavy, h: .center); cLab.position = CGPoint(x: chaosX, y: 30); hud.addChild(cLab)
+        let chaosX = leftX + barW + 40
+        chaosLabel = makeLabel("0", size: 26, color: Palette.ink, weight: .black, h: .center)
+        chaosLabel.position = CGPoint(x: chaosX, y: 2); hud.addChild(chaosLabel)
+        let cLab = makeLabel("MISCHIEF", size: 9, color: Palette.ink, weight: .heavy, h: .center); cLab.position = CGPoint(x: chaosX, y: 26); hud.addChild(cLab)
 
         dayBar = BarNode(width: size.width - 40, height: 5, color: Palette.gold)
         dayBar.position = CGPoint(x: -size.width / 2 + 20, y: hudHeight / 2 - 12); hud.addChild(dayBar)
@@ -411,6 +450,20 @@ final class GameScene: BaseScene {
         climbBtn?.alpha = canClimbNow ? 1 : 0.45
     }
     private var comboFactor: CGFloat { combo >= 2 ? 1 + 0.4 * CGFloat(combo - 1) : 1 }
+
+    private func updateAlert() {
+        let seen = isSeen
+        let pulsing = alertGlow.action(forKey: "pulse") != nil
+        if seen && !pulsing {
+            alertGlow.run(.repeatForever(.sequence([.fadeAlpha(to: 0.75, duration: 0.38), .fadeAlpha(to: 0.12, duration: 0.38)])), withKey: "pulse")
+            suspMeterBG.run(.repeatForever(.sequence([.scale(to: 1.04, duration: 0.38), .scale(to: 1.0, duration: 0.38)])), withKey: "pulse")
+            alertLabel.run(.fadeIn(withDuration: 0.12))
+        } else if !seen && pulsing {
+            alertGlow.removeAction(forKey: "pulse"); alertGlow.run(.fadeOut(withDuration: 0.3))
+            suspMeterBG.removeAction(forKey: "pulse"); suspMeterBG.run(.scale(to: 1, duration: 0.2))
+            alertLabel.run(.fadeOut(withDuration: 0.2))
+        }
+    }
 
     private func setBanner() {
         var txt = "📱  make your move"; var col = Palette.good
@@ -531,8 +584,6 @@ final class GameScene: BaseScene {
         let dtf = CGFloat(dt)
 
         dayT += dt
-        sunX = worldWidth * (0.05 + 0.14 * CGFloat(dayT / cfg.length))
-        updateSun()
         if dayT >= cfg.length { return finish(caught: false) }
 
         // watcher gaze
@@ -591,6 +642,7 @@ final class GameScene: BaseScene {
         spawnCollectibles(dt)
         autoCollect()
         if thoughtCooldown > 0 { thoughtCooldown -= dt }
+        updateAlert()
 
         if susp >= 100 { return finish(caught: true) }
         syncHUD()
@@ -758,16 +810,6 @@ final class GameScene: BaseScene {
         syncHUD()
     }
 
-    private func updateSun() {
-        let p = UIBezierPath()
-        p.move(to: CGPoint(x: sunX - 44, y: floorY))
-        p.addLine(to: CGPoint(x: sunX + 44, y: floorY))
-        p.addLine(to: CGPoint(x: sunX + 70, y: 0))
-        p.addLine(to: CGPoint(x: sunX - 70, y: 0))
-        p.close()
-        sunbeam.path = p.cgPath
-    }
-
     private func updateCamera() {
         let camX = min(max(cat.position.x - size.width / 2, 0), max(0, worldWidth - size.width))
         let camY = min(max(cat.position.y - size.height * 0.42, 0), max(0, worldHeight - size.height))
@@ -811,6 +853,8 @@ final class GameScene: BaseScene {
         guard !ended else { return }
         ended = true
         cat.setWalking(false)
+        alertGlow?.removeAllActions(); alertGlow?.alpha = 0
+        suspMeterBG?.removeAllActions(); suspMeterBG?.setScale(1)
         var stars = 0
         if !caught {
             stars = chaos >= Int(Double(cfg.target) * 1.6) ? 3 : (chaos >= cfg.target ? 2 : 1)

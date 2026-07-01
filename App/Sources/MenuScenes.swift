@@ -69,7 +69,7 @@ final class RoomSelectScene: BaseScene {
             s.navigate(to: MenuScene(size: s.size), .push(with: .right, duration: 0.32)) }
         coinLabel = addCoinChip()
         let title = makeLabel("Pick a room", size: 26, color: Palette.ink, weight: .heavy)
-        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 64)
+        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 100)
         addChild(title)
         layoutRooms()
     }
@@ -78,7 +78,7 @@ final class RoomSelectScene: BaseScene {
         children.filter { $0.name == "roomcard" }.forEach { $0.removeFromParent() }
         let cardW = size.width - 44
         let cardH: CGFloat = 92
-        var y = size.height - topInset - 120
+        var y = size.height - topInset - 172
         for room in Content.rooms {
             let card = SKNode(); card.name = "roomcard"
             let panel = roundedPanel(CGSize(width: cardW, height: cardH), fill: Palette.panel, corner: 20)
@@ -133,16 +133,16 @@ final class LevelSelectScene: BaseScene {
             s.navigate(to: RoomSelectScene(size: s.size), .push(with: .right, duration: 0.32)) }
         _ = addCoinChip()
         let title = makeLabel("\(room.emoji) \(room.name)", size: 24, color: Palette.ink, weight: .heavy)
-        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 64)
+        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 100)
         addChild(title)
         let hint = makeLabel("Cause mayhem before bedtime", size: 13, color: Palette.inkSoft, weight: .bold)
-        hint.position = CGPoint(x: size.width/2, y: size.height - topInset - 90)
+        hint.position = CGPoint(x: size.width/2, y: size.height - topInset - 128)
         addChild(hint)
 
         let cols = 3
         let gap: CGFloat = 14
         let cell = (size.width - 44 - gap * CGFloat(cols - 1)) / CGFloat(cols)
-        let startY = size.height - topInset - 140
+        let startY = size.height - topInset - 200
         for day in 0..<room.days {
             let r = day / cols, c = day % cols
             let x = 22 + cell/2 + CGFloat(c) * (cell + gap)
@@ -187,11 +187,11 @@ final class ShopScene: BaseScene {
             s.navigate(to: MenuScene(size: s.size), .push(with: .right, duration: 0.32)) }
         coinLabel = addCoinChip()
         let title = makeLabel("Shop", size: 26, color: Palette.ink, weight: .heavy)
-        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 64)
+        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 100)
         addChild(title)
 
         // category toggle
-        let toggleY = size.height - topInset - 104
+        let toggleY = size.height - topInset - 140
         let skinsBtn = ButtonNode("Looks", size: CGSize(width: 120, height: 40), fill: Palette.ink, fontSize: 16)
         skinsBtn.position = CGPoint(x: size.width/2 - 66, y: toggleY)
         skinsBtn.onTap = { [weak self] in self?.category = .skin; self?.rebuild() }
@@ -211,7 +211,7 @@ final class ShopScene: BaseScene {
         let items = category == .skin ? Content.skins : Content.upgrades
         let cardW = size.width - 44
         let cardH: CGFloat = 78
-        var y = size.height - topInset - 156
+        var y = size.height - topInset - 192
         for item in items {
             listRoot.addChild(makeRow(item, width: cardW, height: cardH, y: y))
             y -= cardH + 12
