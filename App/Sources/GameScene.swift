@@ -8,14 +8,14 @@ final class BreakableSprite: SKNode {
     let standX: CGFloat
     let mult: CGFloat
     private(set) var messed = false
-    private let icon: SKLabelNode
+    private let icon: SKNode
 
     init(placement: Placement, worldY: CGFloat) {
         self.def = placement.def
         self.platformId = placement.platform
         self.standX = placement.x
         self.mult = placement.mult
-        self.icon = makeLabel(BreakableSprite.emoji(placement.def.kind), size: 28)
+        self.icon = IconFactory.breakable(placement.def.kind)
         super.init()
         position = CGPoint(x: placement.x, y: worldY)
         icon.position = CGPoint(x: 0, y: 18)
@@ -45,17 +45,6 @@ final class BreakableSprite: SKNode {
         icon.run(.group([.move(to: CGPoint(x: 0, y: 18), duration: 0.2),
                          .rotate(toAngle: 0, duration: 0.2), .fadeAlpha(to: 1, duration: 0.2)]))
     }
-
-    static func emoji(_ kind: String) -> String {
-        switch kind {
-        case "vase": return "🏺"; case "plant": return "🪴"; case "cup": return "🥤"
-        case "books": return "📚"; case "tp": return "🧻"; case "lamp": return "💡"
-        case "glass": return "🍷"; case "fruit": return "🍎"; case "plate": return "🍽️"
-        case "perfume": return "🧴"; case "mug": return "☕️"; case "clock": return "⏰"
-        case "duck": return "🦆"; case "keyboard": return "⌨️"
-        default: return "🧸"
-        }
-    }
 }
 
 // MARK: - Collectible
@@ -66,8 +55,7 @@ final class Collectible: SKNode {
     init(value: Int, isGem: Bool, platformId: Int) {
         self.value = value; self.isGem = isGem; self.platformId = platformId
         super.init()
-        let l = makeLabel(isGem ? "💎" : "🪙", size: isGem ? 24 : 20)
-        addChild(l)
+        addChild(isGem ? IconFactory.gem() : IconFactory.coin())
         run(.repeatForever(.sequence([.moveBy(x: 0, y: 5, duration: 0.6), .moveBy(x: 0, y: -5, duration: 0.6)])))
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -78,14 +66,15 @@ final class LootBox: SKNode {
     let platformId: Int
     let tier: CGFloat            // 0..1 height — richer higher up
     private(set) var opened = false
-    private let icon = makeLabel("🎁", size: 30)
+    private let icon = IconFactory.loot()
 
     init(platformId: Int, tier: CGFloat) {
         self.platformId = platformId; self.tier = tier
         super.init()
-        icon.position = CGPoint(x: 0, y: 18); addChild(icon)
-        let glow = makeLabel("✨", size: 14); glow.position = CGPoint(x: 0, y: 40); glow.alpha = 0.85
-        glow.run(.repeatForever(.sequence([.fadeAlpha(to: 0.3, duration: 0.7), .fadeAlpha(to: 0.9, duration: 0.7)])))
+        icon.position = CGPoint(x: 0, y: 16); addChild(icon)
+        let glow = SKShapeNode(circleOfRadius: 4); glow.fillColor = Palette.gold; glow.strokeColor = .clear
+        glow.position = CGPoint(x: 0, y: 38); glow.alpha = 0.85
+        glow.run(.repeatForever(.sequence([.fadeAlpha(to: 0.25, duration: 0.7), .fadeAlpha(to: 0.9, duration: 0.7)])))
         addChild(glow)
         run(.repeatForever(.sequence([.moveBy(x: 0, y: 4, duration: 0.7), .moveBy(x: 0, y: -4, duration: 0.7)])))
     }
@@ -94,7 +83,6 @@ final class LootBox: SKNode {
     func open() {
         guard !opened else { return }
         opened = true
-        icon.text = "✨"
         icon.run(.sequence([.scale(to: 1.5, duration: 0.15), .fadeOut(withDuration: 0.4), .removeFromParent()]))
     }
 }
@@ -148,6 +136,7 @@ final class GameScene: BaseScene {
     private var ended = false
     private var lastTime: TimeInterval = 0
     private var spawnTimer: Double = 4
+    private var speechTimer: Double = 3.5
 
     // combo
     private var combo = 0
@@ -161,27 +150,33 @@ final class GameScene: BaseScene {
     private var actT: Double = 0
     private var catPlatform = 0
     private var moveDir: CGFloat = 0
-    private var climbHeld = false
+    private var upHeld = false
+    private var downHeld = false
     private var climbLink: LinkDef?
     private var climbTarget = 0
+    private var isJumping = false
     private var swatTarget: BreakableSprite?
 
-    // input
-    private enum Role { case left, right, climb }
+    // signature ability
+    private var abilityCharge: CGFloat = 0     // 0..1, fills from self-care
+    private var ghostTimer: Double = 0         // seconds of Ghost Mode remaining
+    private var ghost: Bool { ghostTimer > 0 }
+
+    // input — everything is relative to the cat (see assign)
+    private enum Role { case left, right, up, down }
     private var touchRoles: [UITouch: Role] = [:]
-    private var climbBtnCenter: CGPoint = .zero
-    private var swatBtnCenter: CGPoint = .zero
-    private var climbBtnR: CGFloat = 34
-    private var swatBtnR: CGFloat = 36
+    private var abilityBtnCenter: CGPoint = .zero
+    private var abilityBtnR: CGFloat = 40
     private var quitRect: CGRect = .zero
     private var hudHeight: CGFloat = 140
 
     // tuning
-    private let walkSpeed: CGFloat = 188
+    private var walkSpeed: CGFloat { ghost ? 300 : 188 }
     private let climbSpeed: CGFloat = 150
-    private let swatRange: CGFloat = 64
-    private let climbReach: CGFloat = 46
-    private var hopCost: CGFloat { max(8, 16 - CGFloat(upBelly)) }
+    private let swatRange: CGFloat = 66
+    private let climbReach: CGFloat = 52
+    private let swatTapRadius: CGFloat = 54
+    private var hopCost: CGFloat { ghost ? 0 : max(8, 16 - CGFloat(upBelly)) }
 
     // HUD
     private var energyBar: BarNode!
@@ -195,7 +190,9 @@ final class GameScene: BaseScene {
     private var comboLabel: SKLabelNode!
     private var bannerLabel: SKLabelNode!
     private var bannerPanel: SKShapeNode!
-    private var climbBtn: SKShapeNode!
+    private var abilityBtn: SKShapeNode!
+    private var abilityRing: SKShapeNode!
+    private var abilityLabel: SKLabelNode!
     private var thoughtNode: SKNode?
     private var thoughtCooldown: Double = 0
 
@@ -315,15 +312,17 @@ final class GameScene: BaseScene {
     }
 
     private func buildBowls() {
-        func bowl(_ x: CGFloat, _ color: UIColor, _ glyph: String, _ gsize: CGFloat) -> SKNode {
+        func bowl(_ x: CGFloat, _ color: UIColor, _ content: SKNode) -> SKNode {
             let n = SKNode(); n.position = CGPoint(x: x, y: floorY)
-            let dish = SKShapeNode(ellipseIn: CGRect(x: -20, y: -8, width: 40, height: 16))
+            let dish = SKShapeNode(ellipseIn: CGRect(x: -22, y: -9, width: 44, height: 18))
             dish.fillColor = color; dish.strokeColor = .clear; n.addChild(dish)
-            let g = makeLabel(glyph, size: gsize); n.addChild(g)
+            content.position = CGPoint(x: 0, y: 2); n.addChild(content)
             return n
         }
-        foodBowl = bowl(worldWidth * 0.07, Palette.flameDeep, "🐟", 16); world.addChild(foodBowl)
-        waterBowl = bowl(worldWidth * 0.13, Palette.water, "💧", 14); world.addChild(waterBowl)
+        // Feeding nook in the shaded left corner — clear of the sunbeam window (~0.30) and the
+        // floor watcher (~0.86).
+        foodBowl = bowl(worldWidth * 0.05, Palette.flameDeep, IconFactory.fish()); world.addChild(foodBowl)
+        waterBowl = bowl(worldWidth * 0.11, Palette.water, IconFactory.droplet()); world.addChild(waterBowl)
     }
 
     private func buildBreakables() {
@@ -440,41 +439,53 @@ final class GameScene: BaseScene {
         let goal = makeLabel("Day \(day + 1) · goal \(cfg.target)", size: 10, color: Palette.ink, weight: .bold, h: .left)
         goal.position = CGPoint(x: -size.width / 2 + 20, y: hudHeight / 2 - 28); hud.addChild(goal)
 
-        // Control buttons (hold to move via screen sides; these two are tap/hold buttons)
-        swatBtnCenter = CGPoint(x: size.width - 128, y: hudHeight * 0.46)
-        climbBtnCenter = CGPoint(x: size.width - 48, y: hudHeight * 0.46)
-        let swat = controlButton(at: swatBtnCenter, r: swatBtnR, fill: Palette.flame, glyph: "🐾", label: "SWAT")
-        addChild(swat)
-        climbBtn = controlButton(at: climbBtnCenter, r: climbBtnR, fill: Palette.eyeDeep, glyph: "▲", label: "CLIMB")
-        addChild(climbBtn)
+        // Signature-ability button (bottom-right). Movement is done by touching around the cat.
+        abilityBtnCenter = CGPoint(x: size.width - 52, y: hudHeight * 0.46)
+        abilityBtn = SKShapeNode(circleOfRadius: abilityBtnR)
+        abilityBtn.fillColor = Palette.eyeDeep; abilityBtn.strokeColor = UIColor(hex: 0xFBF6EE, alpha: 0.8); abilityBtn.lineWidth = 2
+        abilityBtn.position = abilityBtnCenter; abilityBtn.zPosition = 58; addChild(abilityBtn)
+        let glyph = IconFactory.lightning(); abilityBtn.addChild(glyph)
+        let track = SKShapeNode(circleOfRadius: abilityBtnR + 4)
+        track.strokeColor = UIColor(hex: 0xFBF6EE, alpha: 0.25); track.lineWidth = 4; track.fillColor = .clear
+        abilityBtn.addChild(track)
+        abilityRing = SKShapeNode()   // charge arc, path set in syncHUD
+        abilityRing.strokeColor = Palette.gold; abilityRing.lineWidth = 4; abilityRing.fillColor = .clear
+        abilityBtn.addChild(abilityRing)
+        abilityLabel = makeLabel("ABILITY", size: 9, color: UIColor(hex: 0xFBF6EE), weight: .heavy)
+        abilityLabel.position = CGPoint(x: 0, y: -abilityBtnR - 9); abilityBtn.addChild(abilityLabel)
 
         // hint
-        let hint = makeLabel("hold left / right to move", size: 11, color: UIColor(hex: 0xFBF6EE, alpha: 0.9), weight: .heavy)
-        hint.position = CGPoint(x: size.width / 2 - 30, y: hudHeight + 16); hint.zPosition = 56; addChild(hint)
-        hint.run(.sequence([.wait(forDuration: 4), .fadeOut(withDuration: 0.6), .removeFromParent()]))
+        let hint = makeLabel("touch around the cat to move · tap the cat to swat", size: 11, color: UIColor(hex: 0xFBF6EE, alpha: 0.95), weight: .heavy)
+        hint.position = CGPoint(x: size.width / 2, y: hudHeight + 16); hint.zPosition = 56; addChild(hint)
+        hint.run(.sequence([.wait(forDuration: 5), .fadeOut(withDuration: 0.6), .removeFromParent()]))
 
         syncHUD()
     }
 
-    private func controlButton(at c: CGPoint, r: CGFloat, fill: UIColor, glyph: String, label: String) -> SKShapeNode {
-        let node = SKShapeNode(circleOfRadius: r)
-        node.fillColor = fill; node.strokeColor = UIColor(hex: 0xFBF6EE, alpha: 0.8); node.lineWidth = 2
-        node.position = c; node.zPosition = 58
-        let g = makeLabel(glyph, size: r * 0.8, color: .white, weight: .black); g.position = CGPoint(x: 0, y: 2); node.addChild(g)
-        let l = makeLabel(label, size: 9, color: UIColor(hex: 0xFBF6EE), weight: .heavy); l.position = CGPoint(x: 0, y: -r - 8); node.addChild(l)
-        return node
-    }
-
     private func syncHUD() {
         energyBar.setValue(energy / maxEnergy)
-        energyBar.setColor(energy < hopCost ? Palette.flame : Palette.energy)
+        energyBar.setColor(energy < hopCost + 0.1 ? Palette.flame : Palette.energy)
         suspBar.setValue(susp / 100)
         suspBar.setColor(susp > 70 ? Palette.susp : susp > 40 ? Palette.flame : Palette.good)
         chaosLabel.text = "\(chaos)"
         coinLabel.text = "\(GameData.shared.coins)"
         dayBar.setValue(CGFloat(dayT / cfg.length))
         comboLabel.text = combo >= 2 ? "COMBO ×\(combo)" : ""
-        climbBtn?.alpha = canClimbNow ? 1 : 0.45
+        // ability button: ring arc shows charge; glows + pulses when ready
+        let ready = abilityCharge >= 1
+        let frac = ghost ? 1 : abilityCharge
+        if frac > 0.001 {
+            let arc = UIBezierPath(arcCenter: .zero, radius: abilityBtnR + 4,
+                                   startAngle: .pi / 2, endAngle: .pi / 2 + 2 * .pi * frac, clockwise: true)
+            abilityRing.path = arc.cgPath
+        } else { abilityRing.path = nil }
+        abilityRing.strokeColor = ghost ? Palette.eye : Palette.gold
+        abilityBtn.alpha = ready || ghost ? 1 : 0.7
+        abilityBtn.fillColor = ghost ? Palette.eye : Palette.eyeDeep
+        abilityLabel.text = ghost ? "GHOST!" : (ready ? "READY!" : "ABILITY")
+        if ready && abilityBtn.action(forKey: "rdy") == nil {
+            abilityBtn.run(.repeatForever(.sequence([.scale(to: 1.08, duration: 0.4), .scale(to: 1.0, duration: 0.4)])), withKey: "rdy")
+        } else if !ready { abilityBtn.removeAction(forKey: "rdy"); abilityBtn.setScale(1) }
     }
     private var comboFactor: CGFloat { combo >= 2 ? 1 + 0.4 * CGFloat(combo - 1) : 1 }
 
@@ -525,6 +536,31 @@ final class GameScene: BaseScene {
     private func tidyOne() {
         if let one = breakables.filter({ $0.messed }).randomElement(), Double.random(in: 0...1) < 0.7 { one.restore() }
     }
+
+    private func humanSpeak() {
+        let candidates = watchers.filter { $0.node.gaze != .away }
+        guard let w = candidates.randomElement() else { return }
+        let watching = w.node.gaze == .watch
+        let lines = watching
+            ? ["I KNOW you're up to something.", "Those guilty little eyes…", "Don't. You. Dare.",
+               "I'm watching you, fuzzball.", "What was that noise?!", "Bad cat. BAD.", "Off the counter!"]
+            : ["just five more minutes…", "ugh, work emails.", "where's the remote?",
+               "so comfy right now.", "did I feed the cat?", "one more episode…", "is it Friday yet?"]
+        guard let line = lines.randomElement() else { return }
+        let node = SKNode()
+        let label = makeLabel(line, size: 12, color: Palette.ink, weight: .semibold)
+        label.preferredMaxLayoutWidth = 150; label.numberOfLines = 0; label.verticalAlignmentMode = .center
+        let bw = max(60, min(label.frame.width + 20, 184)), bh = max(26, label.frame.height + 14)
+        let bubble = roundedPanel(CGSize(width: bw, height: bh), fill: Palette.panel, corner: 12, shadow: false)
+        node.addChild(bubble); node.addChild(label)
+        let hx = min(max(w.node.position.x, bw / 2 + 6), worldWidth - bw / 2 - 6)
+        node.position = CGPoint(x: hx, y: w.node.position.y + 122)
+        node.zPosition = 66
+        world.addChild(node)
+        node.setScale(0.6); node.alpha = 0
+        node.run(.sequence([.group([.scale(to: 1, duration: 0.15), .fadeIn(withDuration: 0.15)]),
+                            .wait(forDuration: 2.0), .fadeOut(withDuration: 0.3), .removeFromParent()]))
+    }
     private var anyWatching: Bool { watchers.contains { $0.node.gaze == .watch } }
     /// True when the cat sits inside a watching person's vision cone.
     private func catInCone(_ w: Watcher) -> Bool {
@@ -538,20 +574,27 @@ final class GameScene: BaseScene {
         while diff < -.pi { diff += 2 * .pi }
         return abs(diff) <= coneHalf
     }
-    private var isSeen: Bool { watchers.contains { catInCone($0) } }
+    private var isSeen: Bool { !ghost && watchers.contains { catInCone($0) } }
     private var onHigh: Bool { catPlatform != 0 }
-    private var idle: Bool { moveDir == 0 && climbLink == nil && action == .none && !climbHeld }
+    private var idle: Bool { moveDir == 0 && climbLink == nil && !isJumping && action == .none && !upHeld && !downHeld }
 
-    // MARK: input
+    // MARK: input — directions are relative to the cat; tap the cat to swat
+    private func catScene() -> CGPoint { CGPoint(x: cat.position.x + world.position.x, y: cat.position.y + world.position.y) }
+    private func role(for rel: CGPoint) -> Role {
+        if abs(rel.x) >= abs(rel.y) { return rel.x < 0 ? .left : .right }
+        return rel.y > 0 ? .up : .down
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for t in touches { assign(t, at: t.location(in: self)) }
         refreshControls()
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            if let r = touchRoles[t], r == .left || r == .right {
-                touchRoles[t] = t.location(in: self).x < size.width / 2 ? .left : .right
-            }
+        let cs = catScene()
+        for t in touches where touchRoles[t] != nil {
+            let loc = t.location(in: self)
+            let rel = CGPoint(x: loc.x - cs.x, y: loc.y - cs.y)
+            if hypot(rel.x, rel.y) >= swatTapRadius { touchRoles[t] = role(for: rel) }
         }
         refreshControls()
     }
@@ -566,7 +609,6 @@ final class GameScene: BaseScene {
 
     private func assign(_ t: UITouch, at loc: CGPoint) {
         if ended {
-            // let result-screen buttons work
             for n in nodes(at: loc) {
                 var node: SKNode? = n
                 while let cur = node { if let b = cur as? ButtonNode { SFX.tap(); b.trigger(); return }; node = cur.parent }
@@ -574,36 +616,76 @@ final class GameScene: BaseScene {
             return
         }
         if loc.y <= hudHeight {
-            if hypot(loc.x - swatBtnCenter.x, loc.y - swatBtnCenter.y) < swatBtnR + 6 { SFX.tap(); doSwat(); return }
-            if hypot(loc.x - climbBtnCenter.x, loc.y - climbBtnCenter.y) < climbBtnR + 6 { touchRoles[t] = .climb; return }
+            if hypot(loc.x - abilityBtnCenter.x, loc.y - abilityBtnCenter.y) < abilityBtnR + 8 { activateAbility() }
             return
         }
         if quitRect.contains(loc) {
             SFX.tap()
             navigate(to: LevelSelectScene(size: size, roomId: roomId), .push(with: .right, duration: 0.3)); return
         }
-        touchRoles[t] = loc.x < size.width / 2 ? .left : .right
+        let cs = catScene()
+        let rel = CGPoint(x: loc.x - cs.x, y: loc.y - cs.y)
+        if hypot(rel.x, rel.y) < swatTapRadius { SFX.tap(); doSwat(); return }
+        touchRoles[t] = role(for: rel)
     }
 
     private func refreshControls() {
-        var l = false, r = false, c = false
+        var l = false, r = false, u = false, d = false
         for role in touchRoles.values {
-            switch role { case .left: l = true; case .right: r = true; case .climb: c = true }
+            switch role { case .left: l = true; case .right: r = true; case .up: u = true; case .down: d = true }
         }
         moveDir = (r ? 1 : 0) - (l ? 1 : 0)
-        climbHeld = c
+        upHeld = u; downHeld = d
     }
 
-    // MARK: climbing helper
-    private var nearestLink: LinkDef? {
+    // MARK: climbing helpers
+    private var nearestUpLink: LinkDef? {
         var best: LinkDef?; var bestD = climbReach
-        for l in layout.links where l.lower == catPlatform || l.upper == catPlatform {
-            let d = abs(cat.position.x - l.x)
-            if d < bestD { bestD = d; best = l }
+        for l in layout.links where l.lower == catPlatform {
+            let dd = abs(cat.position.x - l.x); if dd < bestD { bestD = dd; best = l }
         }
         return best
     }
-    private var canClimbNow: Bool { climbLink != nil || nearestLink != nil }
+    private var nearestDownLink: LinkDef? {
+        var best: LinkDef?; var bestD = climbReach
+        for l in layout.links where l.upper == catPlatform {
+            let dd = abs(cat.position.x - l.x); if dd < bestD { bestD = dd; best = l }
+        }
+        return best
+    }
+    private var canClimbNow: Bool { climbLink != nil || nearestUpLink != nil }
+
+    // MARK: signature ability
+    private func activateAbility() {
+        guard !ended, abilityCharge >= 1, !ghost else { return }
+        abilityCharge = 0
+        ghostTimer = 5
+        SFX.win(); Haptics.bigHit()
+        popText("GHOST MODE!", at: CGPoint(x: cat.position.x, y: cat.position.y + 72), color: Palette.eye, big: true)
+        cat.removeAction(forKey: "ghost")
+        cat.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.3), .fadeAlpha(to: 0.8, duration: 0.3)])), withKey: "ghost")
+    }
+
+    private func jumpDown() {
+        guard !isJumping, climbLink == nil, catPlatform != 0 else { return }
+        let cur = platform(catPlatform)
+        let below = platforms.filter {
+            $0.topY < cur.topY &&
+            cat.position.x >= $0.cx - $0.width / 2 - 12 && cat.position.x <= $0.cx + $0.width / 2 + 12
+        }.max(by: { $0.topY < $1.topY })
+        let target = below ?? platforms[0]
+        isJumping = true
+        cat.setNapping(false)
+        let landX = min(max(cat.position.x, target.cx - target.width / 2 + 16), target.cx + target.width / 2 - 16)
+        let landY = platformWorldY(target.id)
+        let hop = SKAction.moveBy(x: 0, y: 22, duration: 0.12); hop.timingMode = .easeOut
+        let drop = SKAction.move(to: CGPoint(x: landX, y: landY), duration: 0.30); drop.timingMode = .easeIn
+        Haptics.tap()
+        cat.run(.sequence([hop, drop, .run { [weak self] in
+            guard let s = self else { return }
+            s.catPlatform = target.id; s.isJumping = false; Haptics.climb()
+        }]), withKey: "jump")
+    }
 
     // MARK: loop
     override func update(_ currentTime: TimeInterval) {
@@ -642,10 +724,12 @@ final class GameScene: BaseScene {
         // passive drain
         energy = max(0, min(maxEnergy, energy - dtf * 0.2))
         if comboTimer > 0 { comboTimer -= dt; if comboTimer <= 0 { combo = 0 } }
+        if ghostTimer > 0 { ghostTimer -= dt; if ghostTimer <= 0 { cat.removeAction(forKey: "ghost"); cat.alpha = 1 } }
 
-        // refuel: stand still on a bowl to eat/drink, or in the sunbeam to nap
+        // refuel: stand still on a bowl to eat/drink, or in the sunbeam to nap.
+        // Self-care also charges the signature ability.
         if action != .knock {
-            let stationary = moveDir == 0 && climbLink == nil && !climbHeld
+            let stationary = moveDir == 0 && climbLink == nil && !isJumping && !upHeld && !downHeld
             let inSun = !onHigh && abs(cat.position.x - sunX) < size.width * 0.08
             let nearFood = catPlatform == 0 && abs(cat.position.x - foodBowl.position.x) < 30
             let nearWater = catPlatform == 0 && abs(cat.position.x - waterBowl.position.x) < 30
@@ -660,6 +744,9 @@ final class GameScene: BaseScene {
                 energy = min(maxEnergy, energy + dtf * (7 + CGFloat(upNap) * 2))
             } else if action == .eat || action == .drink || action == .nap {
                 action = .none; cat.setNapping(false)
+            }
+            if action == .eat || action == .drink || action == .nap {
+                abilityCharge = min(1, abilityCharge + dtf * 0.13)
             }
         }
 
@@ -683,6 +770,8 @@ final class GameScene: BaseScene {
         spawnCollectibles(dt)
         autoCollect()
         if thoughtCooldown > 0 { thoughtCooldown -= dt }
+        speechTimer -= dt
+        if speechTimer <= 0 { humanSpeak(); speechTimer = Double.random(in: 5...9) }
         updateAlert()
 
         if susp >= 100 { return finish(caught: true) }
@@ -690,23 +779,31 @@ final class GameScene: BaseScene {
     }
 
     private func stepCat(_ dt: CGFloat) {
-        // any movement intent cancels passive states (this is the nap-while-moving fix)
-        if (moveDir != 0 || climbHeld) && (action == .eat || action == .drink || action == .nap) {
+        // any movement intent cancels passive states (nap/eat-while-moving fix)
+        if (moveDir != 0 || upHeld || downHeld) && (action == .eat || action == .drink || action == .nap) {
             action = .none; cat.setNapping(false)
         }
+        guard !isJumping else { return }
         guard action == .none || action == .nap else { return }
 
-        // start a climb if requested and a link is in reach
-        if climbHeld && climbLink == nil {
-            if let l = nearestLink {
-                let target = (l.lower == catPlatform) ? l.upper : l.lower
-                let goingUp = platformWorldY(target) > cat.position.y
-                if goingUp && energy < hopCost { showThought("too tired to climb — refuel first") }
+        // climb UP toward a reachable ladder above
+        if upHeld && climbLink == nil {
+            if let l = nearestUpLink {
+                if energy < hopCost { showThought("too tired to climb — refuel first") }
                 else {
-                    climbLink = l; climbTarget = target
-                    if goingUp { energy = max(0, energy - hopCost) }
+                    climbLink = l; climbTarget = l.upper
+                    energy = max(0, energy - hopCost)
                     if action == .nap { action = .none; cat.setNapping(false) }
                 }
+            }
+        }
+        // DOWN: use a ladder if one's in reach, otherwise hop off the edge
+        if downHeld && climbLink == nil {
+            if let l = nearestDownLink {
+                climbLink = l; climbTarget = l.lower
+                if action == .nap { action = .none; cat.setNapping(false) }
+            } else if catPlatform != 0 {
+                jumpDown(); return
             }
         }
 
@@ -744,7 +841,7 @@ final class GameScene: BaseScene {
     }
 
     private func doSwat() {
-        guard !ended, action == .none, climbLink == nil else { return }
+        guard !ended, action == .none, climbLink == nil, !isJumping else { return }
         // nearest breakable on this platform within reach
         var target: BreakableSprite?; var bestD = swatRange
         for b in breakables where !b.messed && b.platformId == catPlatform {
@@ -817,9 +914,9 @@ final class GameScene: BaseScene {
         if gem { runCoins += 25; GameData.shared.addCoins(25) }
         SFX.coin(); shake(7); Haptics.loot()
         burst(at: lb.position, color: Palette.gold, count: 16)
-        popText("+\(coins)🪙", at: CGPoint(x: lb.position.x, y: lb.position.y + 46), color: Palette.gold, big: true)
+        popText("+\(coins)", at: CGPoint(x: lb.position.x, y: lb.position.y + 46), color: Palette.gold, big: true)
         popText("+\(bonusChaos)", at: CGPoint(x: lb.position.x, y: lb.position.y + 70), color: Palette.flameDeep)
-        if gem { popText("💎+25", at: CGPoint(x: lb.position.x + 28, y: lb.position.y + 54), color: Palette.eye) }
+        if gem { popText("gem +25", at: CGPoint(x: lb.position.x + 30, y: lb.position.y + 54), color: Palette.eye) }
         // loot is noisy
         if isSeen { susp = min(100, susp + 26) } else { susp = min(100, susp + max(2, 6 - CGFloat(upPaws))) }
         syncHUD()
@@ -849,7 +946,7 @@ final class GameScene: BaseScene {
         guard collectibles.contains(where: { $0 === c }) else { return }
         collectibles.removeAll { $0 === c }
         runCoins += c.value; GameData.shared.addCoins(c.value)
-        SFX.coin(); popText("+\(c.value)🪙", at: c.position, color: Palette.gold)
+        SFX.coin(); popText("+\(c.value)", at: c.position, color: Palette.gold)
         c.run(.sequence([.group([.scale(to: 1.6, duration: 0.2), .fadeOut(withDuration: 0.2)]), .removeFromParent()]))
         syncHUD()
     }
@@ -963,7 +1060,7 @@ final class GameScene: BaseScene {
         }
         let chaosL = makeLabel("Mischief: \(chaos)   ·   goal \(cfg.target)", size: 15, color: Palette.inkSoft, weight: .bold)
         chaosL.position = CGPoint(x: 0, y: top - 128); card.addChild(chaosL)
-        let coinsL = makeLabel("Coins earned: \(runCoins) 🪙", size: 16, color: Palette.flameDeep, weight: .heavy)
+        let coinsL = makeLabel("Coins earned: \(runCoins)", size: 16, color: Palette.flameDeep, weight: .heavy)
         coinsL.position = CGPoint(x: 0, y: top - 154); card.addChild(coinsL)
 
         let bw = cardW - 48

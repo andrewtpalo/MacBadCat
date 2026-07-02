@@ -146,7 +146,8 @@ enum Content {
         var rng = SeededRNG(seed: UInt64(ri * 1000 + day * 7 + 1))
 
         // More platforms and wider, taller rooms deeper in / later days.
-        let tiers = min(9, 4 + day + ri / 2)
+        var tiers = min(9, 4 + day + ri / 2)
+        if ri == 0 && day == 0 { tiers = 2 }   // gentle, simple tutorial room
         let tierStep: CGFloat = 104
         // Build a world that's meaningfully taller than the screen so verticality matters.
         let stackH = CGFloat(tiers) * tierStep
