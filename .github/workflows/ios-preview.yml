@@ -32,6 +32,11 @@ jobs:
             echo "RESULT: metal compiler NOT available on this runner"
           fi
 
+      - name: Render app icon
+        run: |
+          swift Tools/make_icon.swift
+          ls -la App/Assets.xcassets/AppIcon.appiconset/
+
       - name: Generate Xcode project
         run: xcodegen generate
 

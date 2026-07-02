@@ -3,6 +3,8 @@ import UIKit
 
 // MARK: - Main Menu
 final class MenuScene: BaseScene {
+    private var coinChipLabel: SKLabelNode?
+
     override func build() {
         let W = size.width, H = size.height
         addRoomBackground(Palette.wall)
@@ -43,8 +45,35 @@ final class MenuScene: BaseScene {
         shop.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: ShopScene(size: s.size)) }
         addChild(shop)
 
-        _ = addCoinChip()
+        coinChipLabel = addCoinChip()
         addSoundToggle()
+        maybeShowDailyReward()
+    }
+
+    private func maybeShowDailyReward() {
+        let status = GameData.shared.dailyRewardStatus()
+        guard status.claimable else { return }
+        // Full-screen button acts as the dimmer AND swallows taps meant for the menu behind it.
+        let blocker = ButtonNode("", size: CGSize(width: size.width, height: size.height),
+                                 fill: UIColor(hex: 0x4A3526, alpha: 0.55), fontSize: 1, shadow: false)
+        blocker.position = CGPoint(x: size.width / 2, y: size.height / 2); blocker.zPosition = 200
+        addChild(blocker)
+        let cardW = min(300, size.width - 56)
+        let card = roundedPanel(CGSize(width: cardW, height: 236), fill: Palette.panel, corner: 24)
+        card.position = CGPoint(x: size.width / 2, y: size.height / 2); card.zPosition = 201; addChild(card)
+        let t = makeLabel("Daily Treat!", size: 24, color: Palette.ink, weight: .black); t.position = CGPoint(x: 0, y: 78); card.addChild(t)
+        let gift = makeLabel("🎁", size: 58); gift.position = CGPoint(x: 0, y: 18); card.addChild(gift)
+        let info = makeLabel("+\(status.reward) coins", size: 22, color: Palette.flameDeep, weight: .black); info.position = CGPoint(x: 0, y: -36); card.addChild(info)
+        let streak = makeLabel("🔥 \(status.streak)-day streak · tap to claim", size: 13, color: Palette.inkSoft, weight: .bold); streak.position = CGPoint(x: 0, y: -66); card.addChild(streak)
+        blocker.onTap = { [weak self, weak blocker, weak card] in
+            let r = GameData.shared.claimDailyReward()
+            if r > 0 { SFX.coin(); Haptics.loot() }
+            self?.coinChipLabel?.text = "\(GameData.shared.coins)"
+            blocker?.removeFromParent()
+            card?.run(.sequence([.group([.scale(to: 0.8, duration: 0.18), .fadeOut(withDuration: 0.18)]), .removeFromParent()]))
+        }
+        card.setScale(0.8); card.alpha = 0
+        card.run(.group([.scale(to: 1, duration: 0.25), .fadeIn(withDuration: 0.25)]))
     }
 
     private func addSoundToggle() {

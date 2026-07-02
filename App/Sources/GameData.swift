@@ -10,9 +10,15 @@ final class GameData: Codable {
     var unlockedRooms: Set<String> = ["living"]
     var dayStars: [String: Int] = [:]          // "roomId:dayIndex" -> stars (0...3)
     var soundOn: Bool = true
+    var hapticsOn: Bool = true
+    var lastRewardDay: Int = 0                  // days since 1970 of last claimed daily reward
+    var rewardStreak: Int = 0
+    var ratingPrompted: Bool = false            // asked for an App Store rating already?
+    var bestRampage: Int = 0                    // high score for endless mode (future)
 
     enum CodingKeys: String, CodingKey {
         case coins, ownedItems, equippedSkin, upgradeLevels, unlockedRooms, dayStars, soundOn
+        case hapticsOn, lastRewardDay, rewardStreak, ratingPrompted, bestRampage
     }
 
     init() {}
@@ -26,6 +32,11 @@ final class GameData: Codable {
         unlockedRooms = (try? c.decode(Set<String>.self, forKey: .unlockedRooms)) ?? ["living"]
         dayStars     = (try? c.decode([String: Int].self, forKey: .dayStars)) ?? [:]
         soundOn      = (try? c.decode(Bool.self, forKey: .soundOn)) ?? true
+        hapticsOn    = (try? c.decode(Bool.self, forKey: .hapticsOn)) ?? true
+        lastRewardDay = (try? c.decode(Int.self, forKey: .lastRewardDay)) ?? 0
+        rewardStreak = (try? c.decode(Int.self, forKey: .rewardStreak)) ?? 0
+        ratingPrompted = (try? c.decode(Bool.self, forKey: .ratingPrompted)) ?? false
+        bestRampage  = (try? c.decode(Int.self, forKey: .bestRampage)) ?? 0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -37,6 +48,33 @@ final class GameData: Codable {
         try c.encode(unlockedRooms, forKey: .unlockedRooms)
         try c.encode(dayStars, forKey: .dayStars)
         try c.encode(soundOn, forKey: .soundOn)
+        try c.encode(hapticsOn, forKey: .hapticsOn)
+        try c.encode(lastRewardDay, forKey: .lastRewardDay)
+        try c.encode(rewardStreak, forKey: .rewardStreak)
+        try c.encode(ratingPrompted, forKey: .ratingPrompted)
+        try c.encode(bestRampage, forKey: .bestRampage)
+    }
+
+    // MARK: daily reward
+    /// Returns (claimable, streakIfClaimed, coinRewardIfClaimed).
+    func dailyRewardStatus() -> (claimable: Bool, streak: Int, reward: Int) {
+        let today = Int(Date().timeIntervalSince1970 / 86400)
+        guard today > lastRewardDay else { return (false, rewardStreak, 0) }
+        let continues = (today - lastRewardDay) == 1
+        let streak = continues ? rewardStreak + 1 : 1
+        let reward = 40 + min(streak, 7) * 20        // 60 → up to 180, caps at day 7
+        return (true, streak, reward)
+    }
+    @discardableResult
+    func claimDailyReward() -> Int {
+        let (claimable, streak, reward) = dailyRewardStatus()
+        guard claimable else { return 0 }
+        let today = Int(Date().timeIntervalSince1970 / 86400)
+        lastRewardDay = today
+        rewardStreak = streak
+        coins += reward
+        save()
+        return reward
     }
 
     // MARK: persistence

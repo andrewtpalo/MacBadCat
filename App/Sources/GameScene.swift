@@ -99,12 +99,16 @@ final class LootBox: SKNode {
     }
 }
 
-// MARK: - Watcher (a person who might see the cat)
+// MARK: - Watcher (a person with a sweeping vision cone)
 final class Watcher {
     let node = HumanNode()
     let platform: Int
     var timer: Double = 3
     var next: HumanNode.Gaze = .watch
+    let cone = SKShapeNode()
+    var baseAngle: CGFloat = .pi     // direction the cone points when centered
+    var phase: Double = 0            // sweep phase
+    var facing: CGFloat = .pi        // current cone direction
     init(platform: Int) { self.platform = platform }
 }
 
@@ -344,10 +348,33 @@ final class GameScene: BaseScene {
             let w = Watcher(platform: spot.platform)
             w.node.position = CGPoint(x: spot.x, y: platformWorldY(spot.platform))
             w.node.setScale(min(1.05, size.width / 400))
+            // Face toward the bulk of the room (whichever side has more space).
+            w.baseAngle = (spot.x > worldWidth / 2) ? .pi : 0
+            w.facing = w.baseAngle
+            w.phase = Double.random(in: 0...(.pi * 2))
+            w.cone.zPosition = 6; w.cone.strokeColor = .clear; w.cone.alpha = 0
+            world.addChild(w.cone)
             world.addChild(w.node)
             watchers.append(w)
             setGaze(w, .distract)
         }
+    }
+
+    private let coneHalf: CGFloat = 0.52          // ~30° half-angle
+    private var coneRange: CGFloat { max(size.width * 0.6, 240) }
+    private func coneApex(_ w: Watcher) -> CGPoint { CGPoint(x: w.node.position.x, y: w.node.position.y + 80) }
+
+    private func drawCone(_ w: Watcher) {
+        let apex = coneApex(w)
+        let p = UIBezierPath()
+        p.move(to: apex)
+        let steps = 10
+        for i in 0...steps {
+            let a = w.facing - coneHalf + (2 * coneHalf) * CGFloat(i) / CGFloat(steps)
+            p.addLine(to: CGPoint(x: apex.x + cos(a) * coneRange, y: apex.y + sin(a) * coneRange))
+        }
+        p.close()
+        w.cone.path = p.cgPath
     }
 
     // MARK: HUD + controls
@@ -466,12 +493,10 @@ final class GameScene: BaseScene {
     }
 
     private func setBanner() {
-        var txt = "📱  make your move"; var col = Palette.good
-        if anyWatching { txt = "👀  EYES ON YOU — freeze or act cute"; col = UIColor(hex: 0xB23A2E) }
+        var txt = "📱  they're distracted — make your move"; var col = Palette.good
+        if isSeen { txt = "👀  SPOTTED — get out of the cone!"; col = UIColor(hex: 0xB23A2E) }
+        else if anyWatching { txt = "😼  someone's scanning — mind the cones"; col = UIColor(hex: 0xC98A2E) }
         else if watchers.allSatisfy({ $0.node.gaze == .away }) { txt = "🚪  all clear — free reign!"; col = Palette.good }
-        else if watchers.contains(where: { $0.next == .watch && $0.node.gaze == .distract && $0.timer < 0.9 }) {
-            txt = "⚠  someone's about to look…"; col = UIColor(hex: 0xC98A2E)
-        }
         bannerLabel.text = txt; bannerLabel.fontColor = col
     }
 
@@ -501,14 +526,19 @@ final class GameScene: BaseScene {
         if let one = breakables.filter({ $0.messed }).randomElement(), Double.random(in: 0...1) < 0.7 { one.restore() }
     }
     private var anyWatching: Bool { watchers.contains { $0.node.gaze == .watch } }
-    /// Seen = a watching person whose vision covers the cat's position (height band matters).
-    private var isSeen: Bool {
-        for w in watchers where w.node.gaze == .watch {
-            if abs(cat.position.x - w.node.position.x) < size.width * 0.72 &&
-               abs(cat.position.y - w.node.position.y) < 250 { return true }
-        }
-        return false
+    /// True when the cat sits inside a watching person's vision cone.
+    private func catInCone(_ w: Watcher) -> Bool {
+        guard w.node.gaze == .watch else { return false }
+        let apex = coneApex(w)
+        let dx = cat.position.x - apex.x, dy = (cat.position.y + 20) - apex.y
+        let dist = hypot(dx, dy)
+        guard dist <= coneRange else { return false }
+        var diff = atan2(dy, dx) - w.facing
+        while diff > .pi { diff -= 2 * .pi }
+        while diff < -.pi { diff += 2 * .pi }
+        return abs(diff) <= coneHalf
     }
+    private var isSeen: Bool { watchers.contains { catInCone($0) } }
     private var onHigh: Bool { catPlatform != 0 }
     private var idle: Bool { moveDir == 0 && climbLink == nil && action == .none && !climbHeld }
 
@@ -586,11 +616,22 @@ final class GameScene: BaseScene {
         dayT += dt
         if dayT >= cfg.length { return finish(caught: false) }
 
-        // watcher gaze
+        // watcher gaze + sweeping vision cones
         for w in watchers {
             w.timer -= dt
             if w.timer <= 0 { setGaze(w, w.next) }
-            else if w.node.gaze == .watch { w.node.lookAt(lookDir(w)) }
+            if w.node.gaze == .watch {
+                w.phase += dt * 0.9
+                w.facing = w.baseAngle + CGFloat(sin(w.phase)) * 0.55
+                drawCone(w)
+                let hot = catInCone(w)
+                w.cone.fillColor = (hot ? Palette.susp : Palette.sun).withAlphaComponent(1)
+                if w.cone.alpha < 0.15 { w.cone.run(.fadeAlpha(to: hot ? 0.24 : 0.15, duration: 0.15)) }
+                else { w.cone.alpha = hot ? 0.24 : 0.15 }
+                w.node.lookAt(cos(w.facing) >= 0 ? 1 : -1)
+            } else if w.cone.alpha > 0 {
+                w.cone.run(.fadeAlpha(to: 0, duration: 0.2))
+            }
         }
         setBanner()
 
@@ -677,7 +718,7 @@ final class GameScene: BaseScene {
             let dist = max(0.001, hypot(dx, dy))
             if dist <= 2.5 {
                 cat.position = CGPoint(x: l.x, y: ty); catPlatform = climbTarget; climbLink = nil
-                cat.setWalking(false)
+                cat.setWalking(false); Haptics.climb()
             } else {
                 let step = min(dist, climbSpeed * dt)
                 cat.position = CGPoint(x: cat.position.x + dx / dist * step, y: cat.position.y + dy / dist * step)
@@ -744,9 +785,11 @@ final class GameScene: BaseScene {
         let gainCoins = Int(CGFloat(b.coinValue) * valueMult)
         chaos += gainChaos; runCoins += gainCoins; GameData.shared.addCoins(gainCoins)
         energy = max(0, energy - CGFloat(b.def.energyCost))
-        SFX.crash(); shake()
+        SFX.crash(); shake(combo >= 3 ? 9 : 6)
+        burst(at: b.position, color: Palette.flameDeep, count: combo >= 3 ? 14 : 9)
+        if combo >= 3 { Haptics.bigHit(); comboFlash() } else { Haptics.knock() }
         let label = combo >= 2 ? "+\(gainChaos)  ×\(combo)" : "+\(gainChaos)"
-        popText(label, at: CGPoint(x: b.position.x, y: b.position.y + 44), color: combo >= 2 ? Palette.gold : Palette.flameDeep)
+        popText(label, at: CGPoint(x: b.position.x, y: b.position.y + 44), color: combo >= 2 ? Palette.gold : Palette.flameDeep, big: combo >= 3)
 
         if isSeen {
             susp = min(100, susp + 38)
@@ -772,8 +815,9 @@ final class GameScene: BaseScene {
         let gem = Double.random(in: 0...1) < (0.3 + Double(lb.tier) * 0.4)
         chaos += bonusChaos; runCoins += coins; GameData.shared.addCoins(coins)
         if gem { runCoins += 25; GameData.shared.addCoins(25) }
-        SFX.coin(); shake()
-        popText("+\(coins)🪙", at: CGPoint(x: lb.position.x, y: lb.position.y + 46), color: Palette.gold)
+        SFX.coin(); shake(7); Haptics.loot()
+        burst(at: lb.position, color: Palette.gold, count: 16)
+        popText("+\(coins)🪙", at: CGPoint(x: lb.position.x, y: lb.position.y + 46), color: Palette.gold, big: true)
         popText("+\(bonusChaos)", at: CGPoint(x: lb.position.x, y: lb.position.y + 70), color: Palette.flameDeep)
         if gem { popText("💎+25", at: CGPoint(x: lb.position.x + 28, y: lb.position.y + 54), color: Palette.eye) }
         // loot is noisy
@@ -816,19 +860,51 @@ final class GameScene: BaseScene {
         world.position = CGPoint(x: -camX, y: -camY)
     }
 
-    // MARK: feedback
-    private func shake() {
-        run(.sequence([.moveBy(x: 5, y: 0, duration: 0.03), .moveBy(x: -10, y: 0, duration: 0.05), .moveBy(x: 5, y: 0, duration: 0.03)]))
+    // MARK: feedback / juice
+    private func shake(_ amount: CGFloat = 6) {
+        run(.sequence([.moveBy(x: amount, y: 0, duration: 0.03),
+                       .moveBy(x: -amount * 2, y: 0, duration: 0.05),
+                       .moveBy(x: amount, y: 0, duration: 0.03)]))
     }
     private func redFlash() {
         let f = SKSpriteNode(color: UIColor(hex: 0xE2554B, alpha: 0.35), size: size)
         f.anchorPoint = .zero; f.zPosition = 80
         addChild(f); f.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
     }
-    private func popText(_ t: String, at p: CGPoint, color: UIColor) {
-        let l = makeLabel(t, size: 18, color: color, weight: .black)
-        l.position = p; l.zPosition = 70; world.addChild(l)
-        l.run(.sequence([.group([.moveBy(x: 0, y: 34, duration: 0.7), .fadeOut(withDuration: 0.7)]), .removeFromParent()]))
+    private func comboFlash() {
+        comboLabel.removeAllActions()
+        comboLabel.setScale(1.6); comboLabel.alpha = 1
+        comboLabel.run(.scale(to: 1.0, duration: 0.25))
+    }
+    /// A quick shower of little shards flying out from a point (in world space).
+    private func burst(at p: CGPoint, color: UIColor, count: Int) {
+        for _ in 0..<count {
+            let s = SKShapeNode(rectOf: CGSize(width: CGFloat.random(in: 3...6), height: CGFloat.random(in: 3...6)), cornerRadius: 1)
+            s.fillColor = color; s.strokeColor = .clear
+            s.position = p; s.zPosition = 71
+            world.addChild(s)
+            let ang = CGFloat.random(in: 0...(.pi * 2))
+            let dist = CGFloat.random(in: 24...70)
+            let dv = CGVector(dx: cos(ang) * dist, dy: sin(ang) * dist + 20)
+            s.run(.sequence([
+                .group([.move(by: dv, duration: 0.5),
+                        .rotate(byAngle: CGFloat.random(in: -3...3), duration: 0.5),
+                        .fadeOut(withDuration: 0.5),
+                        .scale(to: 0.3, duration: 0.5)]),
+                .removeFromParent()
+            ]))
+        }
+    }
+    private func popText(_ t: String, at p: CGPoint, color: UIColor, big: Bool = false) {
+        let l = makeLabel(t, size: big ? 26 : 18, color: color, weight: .black)
+        l.position = p; l.zPosition = 72; world.addChild(l)
+        l.setScale(big ? 0.4 : 1)
+        l.run(.sequence([
+            .group([.scale(to: big ? 1.15 : 1, duration: 0.16),
+                    .moveBy(x: 0, y: big ? 44 : 34, duration: 0.7),
+                    .sequence([.wait(forDuration: 0.35), .fadeOut(withDuration: 0.35)])]),
+            .removeFromParent()
+        ]))
     }
     private func showThought(_ text: String) {
         guard size.width > 0, thoughtCooldown <= 0 else { return }
@@ -861,34 +937,58 @@ final class GameScene: BaseScene {
             GameData.shared.setStars(room: roomId, day: day, value: stars)
             let bonus = cfg.target / 2
             runCoins += bonus; GameData.shared.addCoins(bonus)
-            SFX.win()
-        } else { SFX.caught() }
+            SFX.win(); Haptics.win()
+            // Ask for a rating at a genuine peak-happiness moment: a 3-star clear, once ever.
+            if stars >= 3 && !GameData.shared.ratingPrompted {
+                GameData.shared.ratingPrompted = true; GameData.shared.save()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { AppReview.request() }
+            }
+        } else { SFX.caught(); Haptics.caught() }
         showResults(caught: caught, stars: stars)
     }
 
     private func showResults(caught: Bool, stars: Int) {
         let dim = SKSpriteNode(color: UIColor(hex: 0x4A3526, alpha: 0.5), size: size)
         dim.anchorPoint = .zero; dim.zPosition = 100; addChild(dim)
-        let cardW = min(330, size.width - 44), cardH: CGFloat = 320
+        let cardW = min(330, size.width - 40), cardH: CGFloat = 396
         let card = roundedPanel(CGSize(width: cardW, height: cardH), fill: Palette.panel, corner: 24)
         card.position = CGPoint(x: size.width / 2, y: size.height / 2); card.zPosition = 101; addChild(card)
+        let top = cardH / 2
 
         let title = makeLabel(caught ? "BUSTED!" : "Day \(day + 1) survived", size: 24, color: Palette.ink, weight: .black)
-        title.position = CGPoint(x: 0, y: cardH / 2 - 40); card.addChild(title)
+        title.position = CGPoint(x: 0, y: top - 40); card.addChild(title)
         if !caught {
             let st = makeLabel(String(repeating: "★", count: stars) + String(repeating: "·", count: 3 - stars), size: 36, color: Palette.gold, weight: .heavy)
-            st.position = CGPoint(x: 0, y: cardH / 2 - 86); card.addChild(st)
+            st.position = CGPoint(x: 0, y: top - 84); card.addChild(st)
         }
         let chaosL = makeLabel("Mischief: \(chaos)   ·   goal \(cfg.target)", size: 15, color: Palette.inkSoft, weight: .bold)
-        chaosL.position = CGPoint(x: 0, y: cardH / 2 - 132); card.addChild(chaosL)
+        chaosL.position = CGPoint(x: 0, y: top - 128); card.addChild(chaosL)
         let coinsL = makeLabel("Coins earned: \(runCoins) 🪙", size: 16, color: Palette.flameDeep, weight: .heavy)
-        coinsL.position = CGPoint(x: 0, y: cardH / 2 - 160); card.addChild(coinsL)
+        coinsL.position = CGPoint(x: 0, y: top - 154); card.addChild(coinsL)
 
         let bw = cardW - 48
+
+        // Rewarded "double coins" — the core casual monetization hook.
+        if runCoins > 0 {
+            let dbl = ButtonNode("📺  Double coins  (+\(runCoins))", size: CGSize(width: bw, height: 46), fill: Palette.good, fontSize: 16)
+            dbl.position = CGPoint(x: 0, y: top - 200); dbl.zPosition = 102
+            dbl.onTap = { [weak self, weak dbl] in
+                guard let s = self else { return }
+                dbl?.isEnabledButton = false
+                Ads.showRewarded(from: s, reward: "double_coins") { granted in
+                    guard granted else { dbl?.isEnabledButton = true; return }
+                    GameData.shared.addCoins(s.runCoins); s.runCoins *= 2
+                    SFX.coin(); Haptics.loot()
+                    dbl?.setTitle("Doubled!  ✓")
+                }
+            }
+            card.addChild(dbl)
+        }
+
         let hasNext = !caught && day + 1 < room.days
         let primary = ButtonNode(caught ? "Try again" : (hasNext ? "Next day" : "Back to rooms"),
                                  size: CGSize(width: bw, height: 50), fill: Palette.ink, fontSize: 18)
-        primary.position = CGPoint(x: 0, y: -cardH / 2 + 92); primary.zPosition = 102
+        primary.position = CGPoint(x: 0, y: -top + 108); primary.zPosition = 102
         primary.onTap = { [weak self] in
             guard let s = self else { return }
             if caught { s.navigate(to: GameScene(size: s.size, roomId: s.roomId, day: s.day), .fade(withDuration: 0.3)) }
@@ -897,18 +997,29 @@ final class GameScene: BaseScene {
         }
         card.addChild(primary)
 
-        let row = SKNode(); row.position = CGPoint(x: 0, y: -cardH / 2 + 38); card.addChild(row)
-        let half = (bw - 12) / 2
-        let shopB = ButtonNode("Shop", size: CGSize(width: half, height: 44), fill: Palette.flame, fontSize: 16)
-        shopB.position = CGPoint(x: -half / 2 - 6, y: 0)
+        // Bottom row of three: Shop · Share · Levels
+        let row = SKNode(); row.position = CGPoint(x: 0, y: -top + 46); card.addChild(row)
+        let third = (bw - 20) / 3
+        let shopB = ButtonNode("Shop", size: CGSize(width: third, height: 44), fill: Palette.flame, fontSize: 15)
+        shopB.position = CGPoint(x: -third - 10, y: 0)
         shopB.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: ShopScene(size: s.size), .fade(withDuration: 0.3)) }
         row.addChild(shopB)
-        let roomsB = ButtonNode("Levels", size: CGSize(width: half, height: 44), fill: UIColor(hex: 0x4A3526, alpha: 0.1), textColor: Palette.ink, fontSize: 16)
-        roomsB.position = CGPoint(x: half / 2 + 6, y: 0)
+        let shareB = ButtonNode("Share", size: CGSize(width: third, height: 44), fill: Palette.eyeDeep, fontSize: 15)
+        shareB.position = CGPoint(x: 0, y: 0)
+        shareB.onTap = { [weak self] in
+            guard let s = self else { return }
+            let cap = caught ? "Mac got BUSTED in Bad Cat 😹 #BadCat" : "\(s.stars(stars)) — \(s.chaos) mischief in Bad Cat! 😼 #BadCat"
+            ShareCard.present(from: s.view, caption: cap)
+        }
+        row.addChild(shareB)
+        let roomsB = ButtonNode("Levels", size: CGSize(width: third, height: 44), fill: UIColor(hex: 0x4A3526, alpha: 0.1), textColor: Palette.ink, fontSize: 15)
+        roomsB.position = CGPoint(x: third + 10, y: 0)
         roomsB.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: LevelSelectScene(size: s.size, roomId: s.roomId), .push(with: .right, duration: 0.3)) }
         row.addChild(roomsB)
 
         card.setScale(0.8); card.alpha = 0
         card.run(.group([.scale(to: 1, duration: 0.25), .fadeIn(withDuration: 0.25)]))
     }
+
+    private func stars(_ n: Int) -> String { String(repeating: "★", count: max(0, n)) }
 }
