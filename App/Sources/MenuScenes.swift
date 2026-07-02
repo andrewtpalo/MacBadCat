@@ -35,15 +35,27 @@ final class MenuScene: BaseScene {
 
         // Buttons, stacked with even spacing in the lower third.
         let btnW = min(300, W - 64)
-        let play = ButtonNode("Play", size: CGSize(width: btnW, height: 62), fill: Palette.ink, fontSize: 24)
-        play.position = CGPoint(x: W/2, y: floorH * 0.62)
+        let play = ButtonNode("Play", size: CGSize(width: btnW, height: 56), fill: Palette.ink, fontSize: 22)
+        play.position = CGPoint(x: W/2, y: floorH * 0.80)
         play.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: RoomSelectScene(size: s.size)) }
         addChild(play)
 
-        let shop = ButtonNode("Shop", size: CGSize(width: btnW, height: 54), fill: Palette.flame, fontSize: 20)
-        shop.position = CGPoint(x: W/2, y: floorH * 0.62 - 76)
+        let half = (btnW - 12) / 2
+        let room = ButtonNode("Mac's Room", size: CGSize(width: half, height: 48), fill: Palette.couch, fontSize: 15)
+        room.position = CGPoint(x: W/2 - half/2 - 6, y: floorH * 0.48)
+        room.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: CatRoomScene(size: s.size)) }
+        addChild(room)
+
+        let shop = ButtonNode("Shop", size: CGSize(width: half, height: 48), fill: Palette.flame, fontSize: 15)
+        shop.position = CGPoint(x: W/2 + half/2 + 6, y: floorH * 0.48)
         shop.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: ShopScene(size: s.size)) }
         addChild(shop)
+
+        let awards = ButtonNode("Awards", size: CGSize(width: btnW, height: 40),
+                                fill: UIColor(hex: 0x4A3526, alpha: 0.12), textColor: Palette.ink, fontSize: 14)
+        awards.position = CGPoint(x: W/2, y: floorH * 0.16)
+        awards.onTap = { [weak self] in guard let s = self else { return }; s.navigate(to: AchievementsScene(size: s.size)) }
+        addChild(awards)
 
         coinChipLabel = addCoinChip()
         addSoundToggle()
@@ -62,15 +74,16 @@ final class MenuScene: BaseScene {
         let card = roundedPanel(CGSize(width: cardW, height: 236), fill: Palette.panel, corner: 24)
         card.position = CGPoint(x: size.width / 2, y: size.height / 2); card.zPosition = 201; addChild(card)
         let t = makeLabel("Daily Treat!", size: 24, color: Palette.ink, weight: .black); t.position = CGPoint(x: 0, y: 78); card.addChild(t)
-        let gift = makeLabel("🎁", size: 58); gift.position = CGPoint(x: 0, y: 18); card.addChild(gift)
+        let gift = IconFactory.loot(); gift.setScale(1.8); gift.position = CGPoint(x: 0, y: 18); card.addChild(gift)
         let info = makeLabel("+\(status.reward) coins", size: 22, color: Palette.flameDeep, weight: .black); info.position = CGPoint(x: 0, y: -36); card.addChild(info)
-        let streak = makeLabel("🔥 \(status.streak)-day streak · tap to claim", size: 13, color: Palette.inkSoft, weight: .bold); streak.position = CGPoint(x: 0, y: -66); card.addChild(streak)
+        let streak = makeLabel("\(status.streak)-day streak · tap to claim", size: 13, color: Palette.inkSoft, weight: .bold); streak.position = CGPoint(x: 0, y: -66); card.addChild(streak)
         blocker.onTap = { [weak self, weak blocker, weak card] in
             let r = GameData.shared.claimDailyReward()
             if r > 0 { SFX.coin(); Haptics.loot() }
             self?.coinChipLabel?.text = "\(GameData.shared.coins)"
             blocker?.removeFromParent()
             card?.run(.sequence([.group([.scale(to: 0.8, duration: 0.18), .fadeOut(withDuration: 0.18)]), .removeFromParent()]))
+            if let s = self { s.showAchievements(Achievements.set("streak", to: GameData.shared.rewardStreak)) }
         }
         card.setScale(0.8); card.alpha = 0
         card.run(.group([.scale(to: 1, duration: 0.25), .fadeIn(withDuration: 0.25)]))
@@ -114,7 +127,7 @@ final class RoomSelectScene: BaseScene {
             card.addChild(panel)
             let unlocked = GameData.shared.roomUnlocked(room.id)
 
-            let emoji = makeLabel(room.emoji, size: 34); emoji.position = CGPoint(x: -cardW/2 + 38, y: 4); card.addChild(emoji)
+            let icon = IconFactory.room(room.id); icon.position = CGPoint(x: -cardW/2 + 38, y: 4); card.addChild(icon)
             let nm = makeLabel(room.name, size: 19, color: Palette.ink, weight: .heavy, h: .left)
             nm.position = CGPoint(x: -cardW/2 + 70, y: 14); card.addChild(nm)
             let starsTotal = GameData.shared.totalStars(room: room.id, days: room.days)
@@ -130,8 +143,8 @@ final class RoomSelectScene: BaseScene {
                 card.addChild(enter)
             } else {
                 let canAfford = GameData.shared.coins >= room.unlockCost
-                let unlock = ButtonNode("🔒 \(room.unlockCost)", size: CGSize(width: 100, height: 44),
-                                        fill: canAfford ? Palette.flame : Palette.inkSoft, fontSize: 15)
+                let unlock = ButtonNode("Unlock \(room.unlockCost)", size: CGSize(width: 108, height: 44),
+                                        fill: canAfford ? Palette.flame : Palette.inkSoft, fontSize: 13)
                 unlock.position = CGPoint(x: cardW/2 - 64, y: 0)
                 unlock.onTap = { [weak self] in
                     guard let s = self else { return }
@@ -161,8 +174,11 @@ final class LevelSelectScene: BaseScene {
         addBackButton { [weak self] in guard let s = self else { return }
             s.navigate(to: RoomSelectScene(size: s.size), .push(with: .right, duration: 0.32)) }
         _ = addCoinChip()
-        let title = makeLabel("\(room.emoji) \(room.name)", size: 24, color: Palette.ink, weight: .heavy)
-        title.position = CGPoint(x: size.width/2, y: size.height - topInset - 100)
+        let icon = IconFactory.room(room.id)
+        icon.position = CGPoint(x: size.width/2 - 90, y: size.height - topInset - 100)
+        addChild(icon)
+        let title = makeLabel(room.name, size: 24, color: Palette.ink, weight: .heavy)
+        title.position = CGPoint(x: size.width/2 + 22, y: size.height - topInset - 100)
         addChild(title)
         let hint = makeLabel("Cause mayhem before bedtime", size: 13, color: Palette.inkSoft, weight: .bold)
         hint.position = CGPoint(x: size.width/2, y: size.height - topInset - 128)
@@ -189,7 +205,7 @@ final class LevelSelectScene: BaseScene {
                                    size: 14, color: Palette.gold, weight: .bold)
                 st.position = CGPoint(x: 0, y: -22); card.addChild(st)
             } else {
-                let lock = makeLabel("🔒", size: 24, color: Palette.inkSoft); card.addChild(lock)
+                let lock = IconFactory.padlock(); card.addChild(lock)
             }
             card.position = CGPoint(x: x, y: y)
             addChild(card)
@@ -206,9 +222,11 @@ final class LevelSelectScene: BaseScene {
 
 // MARK: - Shop
 final class ShopScene: BaseScene {
-    private var category: ShopKind = .skin
+    private enum Tab { case looks, breeds, boosts, coins }
+    private var tab: Tab = .looks
     private var coinLabel: SKLabelNode?
     private var listRoot = SKNode()
+    private var tabButtons: [Tab: ButtonNode] = [:]
 
     override func build() {
         addRoomBackground(Palette.wall)
@@ -219,86 +237,188 @@ final class ShopScene: BaseScene {
         title.position = CGPoint(x: size.width/2, y: size.height - topInset - 100)
         addChild(title)
 
-        // category toggle
+        // category tabs
         let toggleY = size.height - topInset - 140
-        let skinsBtn = ButtonNode("Looks", size: CGSize(width: 120, height: 40), fill: Palette.ink, fontSize: 16)
-        skinsBtn.position = CGPoint(x: size.width/2 - 66, y: toggleY)
-        skinsBtn.onTap = { [weak self] in self?.category = .skin; self?.rebuild() }
-        addChild(skinsBtn)
-        let upBtn = ButtonNode("Upgrades", size: CGSize(width: 120, height: 40), fill: Palette.flame, fontSize: 16)
-        upBtn.position = CGPoint(x: size.width/2 + 66, y: toggleY)
-        upBtn.onTap = { [weak self] in self?.category = .upgrade; self?.rebuild() }
-        addChild(upBtn)
+        let names: [(Tab, String)] = [(.looks, "Looks"), (.breeds, "Breeds"), (.boosts, "Boosts"), (.coins, "Coins")]
+        let bw = (size.width - 44 - 24) / 4
+        for (i, (t, name)) in names.enumerated() {
+            let b = ButtonNode(name, size: CGSize(width: bw, height: 38), fill: Palette.inkSoft, fontSize: 13)
+            b.position = CGPoint(x: 22 + bw/2 + CGFloat(i) * (bw + 8), y: toggleY)
+            b.onTap = { [weak self] in self?.tab = t; self?.rebuild() }
+            tabButtons[t] = b
+            addChild(b)
+        }
 
         addChild(listRoot)
+        // Kick off product loading so the Coins tab has prices when opened.
+        Task { [weak self] in
+            await Store.shared.loadIfNeeded()
+            DispatchQueue.main.async { self?.rebuild() }
+        }
         rebuild()
     }
 
     private func rebuild() {
         listRoot.removeAllChildren()
         coinLabel?.text = "\(GameData.shared.coins)"
-        let items = category == .skin ? Content.skins : Content.upgrades
+        for (t, b) in tabButtons { b.setTitleColorState(active: t == tab) }
         let cardW = size.width - 44
-        let cardH: CGFloat = 78
-        var y = size.height - topInset - 192
-        for item in items {
-            listRoot.addChild(makeRow(item, width: cardW, height: cardH, y: y))
-            y -= cardH + 12
+        var y = size.height - topInset - 196
+        switch tab {
+        case .looks:
+            for item in Content.skins { listRoot.addChild(cosmeticRow(item, isBreed: false, width: cardW, y: y)); y -= 74 }
+        case .breeds:
+            for item in Content.breeds { listRoot.addChild(cosmeticRow(item, isBreed: true, width: cardW, y: y)); y -= 74 }
+        case .boosts:
+            for item in Content.upgrades { listRoot.addChild(upgradeRow(item, width: cardW, y: y)); y -= 90 }
+        case .coins:
+            y = buildIAPRows(width: cardW, startY: y)
         }
     }
 
-    private func makeRow(_ item: ShopItem, width: CGFloat, height: CGFloat, y: CGFloat) -> SKNode {
+    // MARK: cosmetic rows (accessories + breeds share equip/buy logic)
+    private func cosmeticRow(_ item: ShopItem, isBreed: Bool, width: CGFloat, y: CGFloat) -> SKNode {
         let card = SKNode()
-        card.addChild(roundedPanel(CGSize(width: width, height: height), fill: Palette.panel, corner: 18))
+        card.addChild(roundedPanel(CGSize(width: width, height: 64), fill: Palette.panel, corner: 16))
         let data = GameData.shared
 
-        let nm = makeLabel(item.name, size: 17, color: Palette.ink, weight: .heavy, h: .left)
-        nm.position = CGPoint(x: -width/2 + 18, y: 14); card.addChild(nm)
-        let blurb = makeLabel(item.blurb, size: 12, color: Palette.inkSoft, weight: .regular, h: .left)
-        blurb.position = CGPoint(x: -width/2 + 18, y: -10); card.addChild(blurb)
+        let nm = makeLabel(item.name, size: 16, color: Palette.ink, weight: .heavy, h: .left)
+        nm.position = CGPoint(x: -width/2 + 18, y: 11); card.addChild(nm)
+        let blurb = makeLabel(item.blurb, size: 11, color: Palette.inkSoft, weight: .regular, h: .left)
+        blurb.position = CGPoint(x: -width/2 + 18, y: -12); card.addChild(blurb)
+        if isBreed {
+            let sw = Breeds.style(item.id)
+            let chip = SKShapeNode(circleOfRadius: 9)
+            chip.fillColor = sw.coat; chip.strokeColor = sw.accent; chip.lineWidth = 3
+            chip.position = CGPoint(x: -width/2 + 18 + nm.frame.width + 16, y: 11)
+            card.addChild(chip)
+        }
 
-        if item.kind == .skin {
-            let owned = data.owns(item.id)
-            let equipped = data.equippedSkin == item.id
-            if equipped {
-                let tag = makeLabel("Equipped", size: 14, color: Palette.good, weight: .heavy)
-                tag.position = CGPoint(x: width/2 - 56, y: 0); card.addChild(tag)
-            } else if owned {
-                let b = ButtonNode("Equip", size: CGSize(width: 86, height: 42), fill: Palette.ink, fontSize: 15)
-                b.position = CGPoint(x: width/2 - 60, y: 0)
-                b.onTap = { [weak self] in data.equippedSkin = item.id; data.save(); self?.rebuild() }
-                card.addChild(b)
-            } else {
-                let afford = data.coins >= item.cost
-                let b = ButtonNode("🪙 \(item.cost)", size: CGSize(width: 96, height: 42),
-                                   fill: afford ? Palette.flame : Palette.inkSoft, fontSize: 15)
-                b.position = CGPoint(x: width/2 - 64, y: 0)
-                b.onTap = { [weak self] in
-                    if data.spend(item.cost) { data.ownedItems.insert(item.id); data.equippedSkin = item.id; data.save(); SFX.coin(); self?.rebuild() }
-                }
-                card.addChild(b)
+        let owned = data.owns(item.id) || item.cost == 0
+        let equipped = isBreed ? (data.equippedBreed == item.id) : (data.equippedSkin == item.id)
+        if equipped {
+            let tag = makeLabel("Equipped", size: 13, color: Palette.good, weight: .heavy)
+            tag.position = CGPoint(x: width/2 - 54, y: 0); card.addChild(tag)
+        } else if owned {
+            let b = ButtonNode("Equip", size: CGSize(width: 80, height: 38), fill: Palette.ink, fontSize: 14)
+            b.position = CGPoint(x: width/2 - 58, y: 0)
+            b.onTap = { [weak self] in
+                if isBreed { data.equippedBreed = item.id } else { data.equippedSkin = item.id }
+                data.save(); SFX.tap(); self?.rebuild()
             }
+            card.addChild(b)
         } else {
-            let lvl = data.upgradeLevel(item.id)
-            let maxed = lvl >= item.maxLevel
-            let lvlTag = makeLabel("Lv \(lvl)/\(item.maxLevel)", size: 12, color: Palette.flameDeep, weight: .heavy, h: .left)
-            lvlTag.position = CGPoint(x: -width/2 + 18, y: -28); card.addChild(lvlTag)
-            if maxed {
-                let tag = makeLabel("MAX", size: 14, color: Palette.good, weight: .heavy)
-                tag.position = CGPoint(x: width/2 - 50, y: 0); card.addChild(tag)
-            } else {
-                let cost = item.cost * (lvl + 1)
-                let afford = data.coins >= cost
-                let b = ButtonNode("🪙 \(cost)", size: CGSize(width: 96, height: 42),
-                                   fill: afford ? Palette.flame : Palette.inkSoft, fontSize: 15)
-                b.position = CGPoint(x: width/2 - 64, y: 0)
-                b.onTap = { [weak self] in
-                    if data.spend(cost) { data.upgradeLevels[item.id] = lvl + 1; data.save(); SFX.coin(); self?.rebuild() }
+            let afford = data.coins >= item.cost
+            let b = ButtonNode("Buy \(item.cost)", size: CGSize(width: 92, height: 38),
+                               fill: afford ? Palette.flame : Palette.inkSoft, fontSize: 13)
+            b.position = CGPoint(x: width/2 - 62, y: 0)
+            b.onTap = { [weak self] in
+                if data.spend(item.cost) {
+                    data.ownedItems.insert(item.id)
+                    if isBreed { data.equippedBreed = item.id } else { data.equippedSkin = item.id }
+                    data.save(); SFX.coin(); Haptics.loot(); self?.rebuild()
                 }
-                card.addChild(b)
             }
+            card.addChild(b)
         }
         card.position = CGPoint(x: size.width/2, y: y)
         return card
     }
+
+    private func upgradeRow(_ item: ShopItem, width: CGFloat, y: CGFloat) -> SKNode {
+        let card = SKNode()
+        card.addChild(roundedPanel(CGSize(width: width, height: 78), fill: Palette.panel, corner: 16))
+        let data = GameData.shared
+        let nm = makeLabel(item.name, size: 16, color: Palette.ink, weight: .heavy, h: .left)
+        nm.position = CGPoint(x: -width/2 + 18, y: 16); card.addChild(nm)
+        let blurb = makeLabel(item.blurb, size: 11, color: Palette.inkSoft, weight: .regular, h: .left)
+        blurb.position = CGPoint(x: -width/2 + 18, y: -6); card.addChild(blurb)
+        let lvl = data.upgradeLevel(item.id)
+        let lvlTag = makeLabel("Lv \(lvl)/\(item.maxLevel)", size: 11, color: Palette.flameDeep, weight: .heavy, h: .left)
+        lvlTag.position = CGPoint(x: -width/2 + 18, y: -26); card.addChild(lvlTag)
+        if lvl >= item.maxLevel {
+            let tag = makeLabel("MAX", size: 13, color: Palette.good, weight: .heavy)
+            tag.position = CGPoint(x: width/2 - 48, y: 0); card.addChild(tag)
+        } else {
+            let cost = item.cost * (lvl + 1)
+            let afford = data.coins >= cost
+            let b = ButtonNode("Buy \(cost)", size: CGSize(width: 92, height: 38),
+                               fill: afford ? Palette.flame : Palette.inkSoft, fontSize: 13)
+            b.position = CGPoint(x: width/2 - 62, y: 0)
+            b.onTap = { [weak self] in
+                if data.spend(cost) { data.upgradeLevels[item.id] = lvl + 1; data.save(); SFX.coin(); self?.rebuild() }
+            }
+            card.addChild(b)
+        }
+        card.position = CGPoint(x: size.width/2, y: y)
+        return card
+    }
+
+    // MARK: real-money rows (StoreKit)
+    private func buildIAPRows(width: CGFloat, startY: CGFloat) -> CGFloat {
+        var y = startY
+        let packs: [(String, String, String)] = [
+            (Store.ID.coinsSmall,  "Pocket Money",  "500 coins"),
+            (Store.ID.coinsMedium, "Heist Haul",    "1,500 coins — best value"),
+            (Store.ID.coinsLarge,  "Dragon Hoard",  "4,000 coins"),
+            (Store.ID.removeAds,   "Remove Ads",    "No more ad breaks, ever"),
+        ]
+        if Store.shared.products.isEmpty {
+            let note = makeLabel("Store unavailable — purchases will appear\nonce the app is live on the App Store.",
+                                 size: 13, color: Palette.inkSoft, weight: .bold)
+            note.numberOfLines = 0
+            note.position = CGPoint(x: size.width/2, y: y - 20)
+            listRoot.addChild(note)
+            y -= 90
+        }
+        for (id, name, blurb) in packs {
+            let card = SKNode()
+            card.addChild(roundedPanel(CGSize(width: width, height: 64), fill: Palette.panel, corner: 16))
+            let nm = makeLabel(name, size: 16, color: Palette.ink, weight: .heavy, h: .left)
+            nm.position = CGPoint(x: -width/2 + 18, y: 11); card.addChild(nm)
+            let bl = makeLabel(blurb, size: 11, color: Palette.inkSoft, weight: .regular, h: .left)
+            bl.position = CGPoint(x: -width/2 + 18, y: -12); card.addChild(bl)
+            if id == Store.ID.removeAds && GameData.shared.adsRemoved {
+                let tag = makeLabel("Owned", size: 13, color: Palette.good, weight: .heavy)
+                tag.position = CGPoint(x: width/2 - 50, y: 0); card.addChild(tag)
+            } else if let product = Store.shared.product(id) {
+                let b = ButtonNode(product.displayPrice, size: CGSize(width: 92, height: 38), fill: Palette.good, fontSize: 14)
+                b.position = CGPoint(x: width/2 - 62, y: 0)
+                b.onTap = { [weak self, weak b] in
+                    b?.isEnabledButton = false
+                    Task {
+                        let ok = await Store.shared.purchase(id)
+                        DispatchQueue.main.async {
+                            if ok { SFX.coin(); Haptics.loot() }
+                            self?.rebuild()
+                        }
+                    }
+                }
+                card.addChild(b)
+            } else {
+                let tag = makeLabel("—", size: 15, color: Palette.inkSoft, weight: .heavy)
+                tag.position = CGPoint(x: width/2 - 50, y: 0); card.addChild(tag)
+            }
+            card.position = CGPoint(x: size.width/2, y: y)
+            listRoot.addChild(card)
+            y -= 74
+        }
+        // Restore purchases (required by App Review when you sell non-consumables)
+        let restore = ButtonNode("Restore Purchases", size: CGSize(width: 200, height: 40),
+                                 fill: UIColor(hex: 0x4A3526, alpha: 0.12), textColor: Palette.ink, fontSize: 13)
+        restore.position = CGPoint(x: size.width/2, y: y - 6)
+        restore.onTap = { [weak self] in
+            Task {
+                await Store.shared.restore()
+                DispatchQueue.main.async { self?.rebuild() }
+            }
+        }
+        listRoot.addChild(restore)
+        return y - 60
+    }
+}
+
+private extension ButtonNode {
+    /// Cheap active/inactive visual for the shop tabs.
+    func setTitleColorState(active: Bool) { alpha = active ? 1.0 : 0.55 }
 }

@@ -15,10 +15,21 @@ final class GameData: Codable {
     var rewardStreak: Int = 0
     var ratingPrompted: Bool = false            // asked for an App Store rating already?
     var bestRampage: Int = 0                    // high score for endless mode (future)
+    var equippedBreed: String = "breed_flame"
+    var adsRemoved: Bool = false                // "Remove Ads" IAP purchased
+    var achProgress: [String: Int] = [:]        // achievement event -> count
+    var achUnlocked: Set<String> = []           // unlocked achievement ids
+    var petsTotal: Int = 0                      // lifetime pets in Mac's Room
+    var lastCareDay: Int = 0                    // daily reset for bond/treats
+    var bondToday: Int = 0
+    var treatsToday: Int = 0
+    var bondRewardClaimed: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case coins, ownedItems, equippedSkin, upgradeLevels, unlockedRooms, dayStars, soundOn
         case hapticsOn, lastRewardDay, rewardStreak, ratingPrompted, bestRampage
+        case equippedBreed, adsRemoved, achProgress, achUnlocked
+        case petsTotal, lastCareDay, bondToday, treatsToday, bondRewardClaimed
     }
 
     init() {}
@@ -37,6 +48,15 @@ final class GameData: Codable {
         rewardStreak = (try? c.decode(Int.self, forKey: .rewardStreak)) ?? 0
         ratingPrompted = (try? c.decode(Bool.self, forKey: .ratingPrompted)) ?? false
         bestRampage  = (try? c.decode(Int.self, forKey: .bestRampage)) ?? 0
+        equippedBreed = (try? c.decode(String.self, forKey: .equippedBreed)) ?? "breed_flame"
+        adsRemoved   = (try? c.decode(Bool.self, forKey: .adsRemoved)) ?? false
+        achProgress  = (try? c.decode([String: Int].self, forKey: .achProgress)) ?? [:]
+        achUnlocked  = (try? c.decode(Set<String>.self, forKey: .achUnlocked)) ?? []
+        petsTotal    = (try? c.decode(Int.self, forKey: .petsTotal)) ?? 0
+        lastCareDay  = (try? c.decode(Int.self, forKey: .lastCareDay)) ?? 0
+        bondToday    = (try? c.decode(Int.self, forKey: .bondToday)) ?? 0
+        treatsToday  = (try? c.decode(Int.self, forKey: .treatsToday)) ?? 0
+        bondRewardClaimed = (try? c.decode(Bool.self, forKey: .bondRewardClaimed)) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -53,6 +73,25 @@ final class GameData: Codable {
         try c.encode(rewardStreak, forKey: .rewardStreak)
         try c.encode(ratingPrompted, forKey: .ratingPrompted)
         try c.encode(bestRampage, forKey: .bestRampage)
+        try c.encode(equippedBreed, forKey: .equippedBreed)
+        try c.encode(adsRemoved, forKey: .adsRemoved)
+        try c.encode(achProgress, forKey: .achProgress)
+        try c.encode(achUnlocked, forKey: .achUnlocked)
+        try c.encode(petsTotal, forKey: .petsTotal)
+        try c.encode(lastCareDay, forKey: .lastCareDay)
+        try c.encode(bondToday, forKey: .bondToday)
+        try c.encode(treatsToday, forKey: .treatsToday)
+        try c.encode(bondRewardClaimed, forKey: .bondRewardClaimed)
+    }
+
+    /// Resets the Mac's-Room daily counters when the calendar day rolls over.
+    func refreshCareDay() {
+        let today = Int(Date().timeIntervalSince1970 / 86400)
+        if today != lastCareDay {
+            lastCareDay = today
+            bondToday = 0; treatsToday = 0; bondRewardClaimed = false
+            save()
+        }
     }
 
     // MARK: daily reward

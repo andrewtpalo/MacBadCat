@@ -9,6 +9,7 @@ final class CatNode: SKNode {
     private let bodyGroup = SKNode()
     private var raisedPaw: SKShapeNode!
     private var accessory: SKNode?
+    private let st = Breeds.style(GameData.shared.equippedBreed)
     private(set) var facing = 1
     /// Set the cat's display size with this instead of setScale so direction flips keep the size.
     var baseScale: CGFloat = 1 { didSet { yScale = baseScale; xScale = baseScale * CGFloat(facing) } }
@@ -51,10 +52,10 @@ final class CatNode: SKNode {
         let tail = SKShapeNode()
         let tp = UIBezierPath(); tp.move(to: CGPoint(x: -20, y: 20))
         tp.addQuadCurve(to: CGPoint(x: -30, y: 50), controlPoint: CGPoint(x: -38, y: 26))
-        tail.path = tp.cgPath; tail.lineWidth = 8; tail.lineCap = .round; tail.strokeColor = Palette.coat
+        tail.path = tp.cgPath; tail.lineWidth = 8; tail.lineCap = .round; tail.strokeColor = st.coat
         let tip = SKShapeNode(); let tip2 = UIBezierPath()
         tip2.move(to: CGPoint(x: -29, y: 40)); tip2.addQuadCurve(to: CGPoint(x: -30, y: 50), controlPoint: CGPoint(x: -33, y: 45))
-        tip.path = tip2.cgPath; tip.lineWidth = 8; tip.lineCap = .round; tip.strokeColor = Palette.flame
+        tip.path = tip2.cgPath; tip.lineWidth = 8; tip.lineCap = .round; tip.strokeColor = st.accent
         tail.addChild(tip)
         upright.addChild(tail)
         tail.run(.repeatForever(.sequence([
@@ -62,32 +63,32 @@ final class CatNode: SKNode {
         ])))
 
         // body
-        bodyGroup.addChild(ell(-2, 22, 22, 20, Palette.coat))
-        bodyGroup.addChild(ell(-8, 14, 15, 12, Palette.coatShade))
-        // legs + ginger socks
-        bodyGroup.addChild(rrect(2, 0, 8, 20, 4, Palette.coat))
-        let backPaw = rrect(11, 0, 8, 18, 4, Palette.coat)
+        bodyGroup.addChild(ell(-2, 22, 22, 20, st.coat))
+        bodyGroup.addChild(ell(-8, 14, 15, 12, st.shade))
+        // legs + socks
+        bodyGroup.addChild(rrect(2, 0, 8, 20, 4, st.coat))
+        let backPaw = rrect(11, 0, 8, 18, 4, st.coat)
         bodyGroup.addChild(backPaw)
-        bodyGroup.addChild(rrect(2, 0, 8, 6, 3, Palette.flame))
-        bodyGroup.addChild(rrect(11, 0, 8, 6, 3, Palette.flame))
-        raisedPaw = rrect(15, 2, 8, 16, 4, Palette.coat)
+        bodyGroup.addChild(rrect(2, 0, 8, 6, 3, st.accent))
+        bodyGroup.addChild(rrect(11, 0, 8, 6, 3, st.accent))
+        raisedPaw = rrect(15, 2, 8, 16, 4, st.coat)
         bodyGroup.addChild(raisedPaw)
         upright.addChild(bodyGroup)
 
         // head
         headGroup.position = CGPoint(x: 14, y: 44)
         // ears
-        headGroup.addChild(tri(CGPoint(x: -12, y: 8), CGPoint(x: -20, y: 26), CGPoint(x: -3, y: 15), Palette.flame))
-        headGroup.addChild(tri(CGPoint(x: 12, y: 8), CGPoint(x: 20, y: 26), CGPoint(x: 3, y: 15), Palette.flame))
+        headGroup.addChild(tri(CGPoint(x: -12, y: 8), CGPoint(x: -20, y: 26), CGPoint(x: -3, y: 15), st.accent))
+        headGroup.addChild(tri(CGPoint(x: 12, y: 8), CGPoint(x: 20, y: 26), CGPoint(x: 3, y: 15), st.accent))
         headGroup.addChild(tri(CGPoint(x: -11, y: 11), CGPoint(x: -16, y: 22), CGPoint(x: -5, y: 14), Palette.pink))
         headGroup.addChild(tri(CGPoint(x: 11, y: 11), CGPoint(x: 16, y: 22), CGPoint(x: 5, y: 14), Palette.pink))
-        // head base + flame mask
-        headGroup.addChild(ell(0, 0, 19, 17, Palette.coat))
-        let mask = ell(0, -5, 12, 9, Palette.flame); mask.alpha = 0.85; headGroup.addChild(mask)
+        // head base + accent mask
+        headGroup.addChild(ell(0, 0, 19, 17, st.coat))
+        let mask = ell(0, -5, 12, 9, st.accent); mask.alpha = 0.85; headGroup.addChild(mask)
         // eyes
         for ex in [CGFloat(-7), 7] {
             headGroup.addChild(ell(ex, 0, 4.2, 5, .white))
-            headGroup.addChild(ell(ex, 0, 3.5, 4.4, Palette.eye))
+            headGroup.addChild(ell(ex, 0, 3.5, 4.4, st.eye))
             headGroup.addChild(ell(ex, 0.4, 1.4, 3.4, Palette.ink))
             let glint = ell(ex - 1.2, 1.4, 0.9, 0.9, .white); headGroup.addChild(glint)
         }
@@ -98,17 +99,17 @@ final class CatNode: SKNode {
 
     private func buildCurled() {
         curled.addChild(ell(0, 2, 32, 7, UIColor(hex: 0x000000, alpha: 0.14)))
-        curled.addChild(ell(0, 16, 30, 17, Palette.coat))
-        curled.addChild(ell(5, 12, 22, 11, Palette.coatShade))
+        curled.addChild(ell(0, 16, 30, 17, st.coat))
+        curled.addChild(ell(5, 12, 22, 11, st.shade))
         let tail = SKShapeNode(); let tp = UIBezierPath()
         tp.move(to: CGPoint(x: -26, y: 14)); tp.addQuadCurve(to: CGPoint(x: 16, y: 4), controlPoint: CGPoint(x: -14, y: -2))
-        tail.path = tp.cgPath; tail.lineWidth = 10; tail.lineCap = .round; tail.strokeColor = Palette.coat
+        tail.path = tp.cgPath; tail.lineWidth = 10; tail.lineCap = .round; tail.strokeColor = st.coat
         curled.addChild(tail)
         let head = SKNode(); head.position = CGPoint(x: -20, y: 18)
-        head.addChild(ell(0, 0, 15, 13, Palette.coat))
-        let m = ell(-3, -3, 8, 6, Palette.flame); m.alpha = 0.85; head.addChild(m)
-        head.addChild(tri(CGPoint(x: -8, y: 7), CGPoint(x: -13, y: 19), CGPoint(x: 0, y: 11), Palette.flame))
-        head.addChild(tri(CGPoint(x: 7, y: 9), CGPoint(x: 12, y: 19), CGPoint(x: 0, y: 11), Palette.flame))
+        head.addChild(ell(0, 0, 15, 13, st.coat))
+        let m = ell(-3, -3, 8, 6, st.accent); m.alpha = 0.85; head.addChild(m)
+        head.addChild(tri(CGPoint(x: -8, y: 7), CGPoint(x: -13, y: 19), CGPoint(x: 0, y: 11), st.accent))
+        head.addChild(tri(CGPoint(x: 7, y: 9), CGPoint(x: 12, y: 19), CGPoint(x: 0, y: 11), st.accent))
         // closed eyes
         for ex in [CGFloat(-6), 4] {
             let e = SKShapeNode(); let p = UIBezierPath()
@@ -151,6 +152,27 @@ final class CatNode: SKNode {
             p.addLine(to: CGPoint(x: 10, y: 14)); p.addLine(to: CGPoint(x: -10, y: 14)); p.close()
             crown.path = p.cgPath; crown.fillColor = Palette.gold; crown.strokeColor = .clear
             acc.addChild(crown)
+        case "skin_scarf":
+            let wrap = rrect(-13, -16, 26, 7, 3, UIColor(hex: 0xB23A2E))
+            let dangle = rrect(2, -30, 7, 16, 3, UIColor(hex: 0xB23A2E))
+            let stripe = rrect(2, -22, 7, 3, 1, UIColor(hex: 0xE6A7A0))
+            acc.addChild(wrap); acc.addChild(dangle); acc.addChild(stripe)
+        case "skin_tophat":
+            acc.addChild(rrect(-12, 12, 24, 4, 2, UIColor(hex: 0x2C2C34)))
+            acc.addChild(rrect(-8, 14, 16, 16, 2, UIColor(hex: 0x2C2C34)))
+            acc.addChild(rrect(-8, 15, 16, 4, 1, UIColor(hex: 0xB23A2E)))
+        case "skin_flower":
+            let fl = SKNode(); fl.position = CGPoint(x: -12, y: 16)
+            for i in 0..<5 {
+                let a = CGFloat(i) / 5 * .pi * 2
+                let petal = SKShapeNode(circleOfRadius: 3.4)
+                petal.fillColor = UIColor(hex: 0xE6A7A0); petal.strokeColor = .clear
+                petal.position = CGPoint(x: cos(a) * 4.4, y: sin(a) * 4.4)
+                fl.addChild(petal)
+            }
+            let core = SKShapeNode(circleOfRadius: 2.6); core.fillColor = Palette.gold; core.strokeColor = .clear
+            fl.addChild(core)
+            acc.addChild(fl)
         default:
             return
         }
@@ -199,13 +221,21 @@ final class HumanNode: SKNode {
     private let head = SKNode()
     private var eyesNode = SKNode()
     private let phone: SKShapeNode
-    private let doorMark: SKLabelNode
+    private let doorMark: SKNode
     private(set) var gaze: Gaze = .distract
     var mad: CGFloat = 0
 
     override init() {
         phone = SKShapeNode(rect: CGRect(x: -10, y: 18, width: 20, height: 12), cornerRadius: 2)
-        doorMark = makeLabel("🚪", size: 26)
+        // small drawn "left the room" door marker
+        let door = SKNode()
+        let frame = SKShapeNode(path: UIBezierPath(roundedRect: CGRect(x: -11, y: -14, width: 22, height: 30), cornerRadius: 3).cgPath)
+        frame.fillColor = UIColor(hex: 0xA67A4E); frame.strokeColor = UIColor(hex: 0x7A5226); frame.lineWidth = 2
+        door.addChild(frame)
+        let knob = SKShapeNode(circleOfRadius: 2.2)
+        knob.fillColor = UIColor(hex: 0xE0A93C); knob.strokeColor = .clear
+        knob.position = CGPoint(x: 6, y: 0); door.addChild(knob)
+        doorMark = door
         super.init()
         debugCheckpoint("Human.init:start")
         buildCouch()

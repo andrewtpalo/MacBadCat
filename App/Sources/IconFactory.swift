@@ -120,6 +120,78 @@ enum IconFactory {
         return n
     }
 
+    // MARK: rooms (menu cards)
+    static func room(_ id: String) -> SKNode {
+        let n = SKNode()
+        switch id {
+        case "living":      // couch
+            n.addChild(rect(-16, -10, 32, 14, 5, UIColor(hex: 0x9E6B79)))
+            n.addChild(rect(-16, 2, 32, 8, 4, UIColor(hex: 0x85586A)))
+            n.addChild(rect(-19, -10, 6, 20, 3, UIColor(hex: 0x85586A)))
+            n.addChild(rect(13, -10, 6, 20, 3, UIColor(hex: 0x85586A)))
+        case "kitchen":     // plate stack
+            n.addChild(ell(0, -8, 15, 4, UIColor(hex: 0xE6E1D6)))
+            n.addChild(ell(0, -2, 13, 4, UIColor(hex: 0xD8D2C4)))
+            n.addChild(ell(0, 4, 14, 4, UIColor(hex: 0xE6E1D6)))
+            n.addChild(ell(0, 10, 11, 4, UIColor(hex: 0xD8D2C4)))
+        case "bedroom":     // bed
+            n.addChild(rect(-17, -8, 34, 10, 3, UIColor(hex: 0xA7AEC2)))
+            n.addChild(rect(-17, 2, 10, 6, 3, UIColor(hex: 0xFBF6EE)))
+            n.addChild(rect(-19, -8, 4, 16, 2, UIColor(hex: 0x7A6452)))
+            n.addChild(rect(15, -8, 4, 12, 2, UIColor(hex: 0x7A6452)))
+        case "bathroom":    // tub
+            n.addChild(rect(-16, -8, 32, 12, 6, UIColor(hex: 0xFBF6EE)))
+            n.addChild(rect(-16, 2, 32, 3, 1, UIColor(hex: 0x9EC2C6)))
+            n.addChild(rect(-14, -14, 4, 6, 2, UIColor(hex: 0x9EA5AD)))
+        case "office":      // monitor
+            n.addChild(rect(-14, -4, 28, 18, 3, UIColor(hex: 0x33414D)))
+            n.addChild(rect(-12, -2, 24, 14, 2, UIColor(hex: 0x9FD0E8)))
+            n.addChild(rect(-3, -10, 6, 6, 1, UIColor(hex: 0x7A6452)))
+            n.addChild(rect(-8, -12, 16, 3, 1, UIColor(hex: 0x7A6452)))
+        default:
+            n.addChild(rect(-12, -12, 24, 24, 4, UIColor(hex: 0xC09467)))
+        }
+        return n
+    }
+
+    static func padlock(_ color: UIColor = UIColor(hex: 0x7A6452)) -> SKNode {
+        let n = SKNode()
+        n.addChild(rect(-9, -10, 18, 13, 3, color))
+        let shackle = SKShapeNode(path: {
+            let p = UIBezierPath(arcCenter: CGPoint(x: 0, y: 3), radius: 6, startAngle: 0, endAngle: .pi, clockwise: true)
+            return p.cgPath
+        }())
+        shackle.strokeColor = color; shackle.lineWidth = 3.5; shackle.fillColor = .clear
+        n.addChild(shackle)
+        return n
+    }
+
+    static func trophy() -> SKNode {
+        let n = SKNode()
+        n.addChild(rect(-8, -2, 16, 12, 4, UIColor(hex: 0xE0A93C)))
+        n.addChild(rect(-2.5, -8, 5, 7, 1, UIColor(hex: 0xB8862B)))
+        n.addChild(rect(-7, -12, 14, 4, 2, UIColor(hex: 0xE0A93C)))
+        let halfPi = CGFloat.pi / 2
+        for sx in [CGFloat(-1), 1] {
+            let start: CGFloat = sx > 0 ? -halfPi : halfPi
+            let end: CGFloat = sx > 0 ? halfPi : 3 * halfPi
+            let p = UIBezierPath(arcCenter: CGPoint(x: sx * 10, y: 5), radius: 4,
+                                 startAngle: start, endAngle: end, clockwise: true)
+            let handle = SKShapeNode(path: p.cgPath)
+            handle.strokeColor = UIColor(hex: 0xE0A93C); handle.lineWidth = 3; handle.fillColor = .clear
+            n.addChild(handle)
+        }
+        return n
+    }
+
+    static func heart(_ color: UIColor = UIColor(hex: 0xE2554B)) -> SKNode {
+        let n = SKNode()
+        n.addChild(ell(-4, 3, 5, 5, color))
+        n.addChild(ell(4, 3, 5, 5, color))
+        n.addChild(tri(CGPoint(x: -8.6, y: 1), CGPoint(x: 8.6, y: 1), CGPoint(x: 0, y: -10), color))
+        return n
+    }
+
     // MARK: HUD glyphs
     static func lightning(_ color: UIColor = .white) -> SKNode {
         let p = UIBezierPath()

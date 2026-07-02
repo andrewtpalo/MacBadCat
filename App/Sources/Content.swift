@@ -234,11 +234,23 @@ enum Content {
 
     // MARK: shop
     static let skins: [ShopItem] = [
-        ShopItem(id: "skin_default", name: "Just Mac",     blurb: "The classic flame point.",       cost: 0,   kind: .skin, maxLevel: 1),
+        ShopItem(id: "skin_default", name: "Just Mac",     blurb: "The classic look.",               cost: 0,   kind: .skin, maxLevel: 1),
         ShopItem(id: "skin_mask",    name: "Bandit Mask",  blurb: "Looks guilty. Is guilty.",        cost: 120, kind: .skin, maxLevel: 1),
         ShopItem(id: "skin_bow",     name: "Tiny Bowtie",  blurb: "A gentleman of crime.",           cost: 180, kind: .skin, maxLevel: 1),
+        ShopItem(id: "skin_scarf",   name: "Cozy Scarf",   blurb: "Crime, but make it autumn.",      cost: 200, kind: .skin, maxLevel: 1),
         ShopItem(id: "skin_glasses", name: "Cool Shades",  blurb: "Deal with it.",                   cost: 250, kind: .skin, maxLevel: 1),
+        ShopItem(id: "skin_flower",  name: "Ear Flower",   blurb: "Too cute to be suspicious.",      cost: 300, kind: .skin, maxLevel: 1),
+        ShopItem(id: "skin_tophat",  name: "Top Hat",      blurb: "A distinguished menace.",         cost: 400, kind: .skin, maxLevel: 1),
         ShopItem(id: "skin_crown",   name: "Tiny Crown",   blurb: "King of the household.",          cost: 500, kind: .skin, maxLevel: 1),
+    ]
+
+    static let breeds: [ShopItem] = [
+        ShopItem(id: "breed_flame",   name: "Flame Point", blurb: "The one and only Mac.",           cost: 0,   kind: .skin, maxLevel: 1),
+        ShopItem(id: "breed_gray",    name: "Gray Ghost",  blurb: "Sleek, silent, judging you.",     cost: 250, kind: .skin, maxLevel: 1),
+        ShopItem(id: "breed_calico",  name: "Calico Chaos",blurb: "Three colors, zero remorse.",     cost: 300, kind: .skin, maxLevel: 1),
+        ShopItem(id: "breed_siamese", name: "Siamese",     blurb: "Loud opinions, louder crimes.",   cost: 350, kind: .skin, maxLevel: 1),
+        ShopItem(id: "breed_black",   name: "Void Cat",    blurb: "Bad luck for your furniture.",    cost: 400, kind: .skin, maxLevel: 1),
+        ShopItem(id: "breed_snow",    name: "Snowball",    blurb: "An angel. Allegedly.",            cost: 500, kind: .skin, maxLevel: 1),
     ]
 
     static let upgrades: [ShopItem] = [

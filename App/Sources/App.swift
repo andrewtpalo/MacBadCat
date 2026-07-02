@@ -125,4 +125,30 @@ class BaseScene: SKScene {
         let top = SKSpriteNode(color: wall, size: CGSize(width: size.width, height: size.height))
         top.anchorPoint = .zero; top.zPosition = -100; addChild(top)
     }
+
+    /// Slide-in toasts for newly unlocked achievements (staggered when several unlock at once).
+    func showAchievements(_ list: [Achievement]) {
+        for (i, a) in list.enumerated() {
+            run(.sequence([.wait(forDuration: Double(i) * 0.5), .run { [weak self] in self?.toast(a) }]))
+        }
+    }
+    private func toast(_ a: Achievement) {
+        let w = min(320, size.width - 32)
+        let panel = roundedPanel(CGSize(width: w, height: 62), fill: Palette.panel, corner: 16)
+        panel.zPosition = 400
+        panel.position = CGPoint(x: size.width / 2, y: size.height + 40)
+        let icon = IconFactory.trophy(); icon.position = CGPoint(x: -w / 2 + 30, y: 0); panel.addChild(icon)
+        let t = makeLabel("Achievement!", size: 11, color: Palette.inkSoft, weight: .heavy, h: .left)
+        t.position = CGPoint(x: -w / 2 + 52, y: 13); panel.addChild(t)
+        let nm = makeLabel("\(a.name)  ·  +\(a.reward)", size: 15, color: Palette.ink, weight: .black, h: .left)
+        nm.position = CGPoint(x: -w / 2 + 52, y: -9); panel.addChild(nm)
+        addChild(panel)
+        Haptics.win(); SFX.win()
+        panel.run(.sequence([
+            .move(to: CGPoint(x: size.width / 2, y: size.height - topInset - 40), duration: 0.3),
+            .wait(forDuration: 2.4),
+            .group([.moveBy(x: 0, y: 60, duration: 0.25), .fadeOut(withDuration: 0.25)]),
+            .removeFromParent()
+        ]))
+    }
 }

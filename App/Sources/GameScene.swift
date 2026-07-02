@@ -399,7 +399,7 @@ final class GameScene: BaseScene {
         addChild(suspMeterBG)
         let sTitle = makeLabel("SUSPICION", size: 12, color: Palette.ink, weight: .black, h: .left)
         sTitle.position = CGPoint(x: -sw / 2, y: 10); suspMeterBG.addChild(sTitle)
-        alertLabel = makeLabel("⚠ SPOTTED", size: 13, color: Palette.susp, weight: .black, h: .right)
+        alertLabel = makeLabel("! SPOTTED", size: 13, color: Palette.susp, weight: .black, h: .right)
         alertLabel.position = CGPoint(x: sw / 2, y: 10); alertLabel.alpha = 0; suspMeterBG.addChild(alertLabel)
         suspBar = BarNode(width: sw, height: 16, color: Palette.susp)
         suspBar.position = CGPoint(x: -sw / 2, y: -10); suspMeterBG.addChild(suspBar)
@@ -504,10 +504,11 @@ final class GameScene: BaseScene {
     }
 
     private func setBanner() {
-        var txt = "📱  they're distracted — make your move"; var col = Palette.good
-        if isSeen { txt = "👀  SPOTTED — get out of the cone!"; col = UIColor(hex: 0xB23A2E) }
-        else if anyWatching { txt = "😼  someone's scanning — mind the cones"; col = UIColor(hex: 0xC98A2E) }
-        else if watchers.allSatisfy({ $0.node.gaze == .away }) { txt = "🚪  all clear — free reign!"; col = Palette.good }
+        var txt = "they're distracted — make your move"; var col = Palette.good
+        if ghost { txt = "GHOST MODE — nobody can see you"; col = Palette.eyeDeep }
+        else if isSeen { txt = "SPOTTED — get out of the cone!"; col = UIColor(hex: 0xB23A2E) }
+        else if anyWatching { txt = "someone's scanning — mind the cones"; col = UIColor(hex: 0xC98A2E) }
+        else if watchers.allSatisfy({ $0.node.gaze == .away }) { txt = "all clear — free reign!"; col = Palette.good }
         bannerLabel.text = txt; bannerLabel.fontColor = col
     }
 
@@ -661,6 +662,7 @@ final class GameScene: BaseScene {
         abilityCharge = 0
         ghostTimer = 5
         SFX.win(); Haptics.bigHit()
+        showAchievements(Achievements.record("ghost"))
         popText("GHOST MODE!", at: CGPoint(x: cat.position.x, y: cat.position.y + 72), color: Palette.eye, big: true)
         cat.removeAction(forKey: "ghost")
         cat.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.3), .fadeAlpha(to: 0.8, duration: 0.3)])), withKey: "ghost")
@@ -816,6 +818,10 @@ final class GameScene: BaseScene {
             if dist <= 2.5 {
                 cat.position = CGPoint(x: l.x, y: ty); catPlatform = climbTarget; climbLink = nil
                 cat.setWalking(false); Haptics.climb()
+                let topY = platforms.map { $0.topY }.max() ?? 0
+                if platform(catPlatform).topY >= topY && topY > 0 {
+                    showAchievements(Achievements.record("summit"))
+                }
             } else {
                 let step = min(dist, climbSpeed * dt)
                 cat.position = CGPoint(x: cat.position.x + dx / dist * step, y: cat.position.y + dy / dist * step)
@@ -885,6 +891,9 @@ final class GameScene: BaseScene {
         SFX.crash(); shake(combo >= 3 ? 9 : 6)
         burst(at: b.position, color: Palette.flameDeep, count: combo >= 3 ? 14 : 9)
         if combo >= 3 { Haptics.bigHit(); comboFlash() } else { Haptics.knock() }
+        var unlocked = Achievements.record("break")
+        if combo >= 3 { unlocked += Achievements.record("combo3") }
+        showAchievements(unlocked)
         let label = combo >= 2 ? "+\(gainChaos)  ×\(combo)" : "+\(gainChaos)"
         popText(label, at: CGPoint(x: b.position.x, y: b.position.y + 44), color: combo >= 2 ? Palette.gold : Palette.flameDeep, big: combo >= 3)
 
@@ -914,6 +923,7 @@ final class GameScene: BaseScene {
         if gem { runCoins += 25; GameData.shared.addCoins(25) }
         SFX.coin(); shake(7); Haptics.loot()
         burst(at: lb.position, color: Palette.gold, count: 16)
+        showAchievements(Achievements.record("loot"))
         popText("+\(coins)", at: CGPoint(x: lb.position.x, y: lb.position.y + 46), color: Palette.gold, big: true)
         popText("+\(bonusChaos)", at: CGPoint(x: lb.position.x, y: lb.position.y + 70), color: Palette.flameDeep)
         if gem { popText("gem +25", at: CGPoint(x: lb.position.x + 30, y: lb.position.y + 54), color: Palette.eye) }
@@ -1035,12 +1045,13 @@ final class GameScene: BaseScene {
             let bonus = cfg.target / 2
             runCoins += bonus; GameData.shared.addCoins(bonus)
             SFX.win(); Haptics.win()
+            if stars >= 3 { showAchievements(Achievements.record("threestar")) }
             // Ask for a rating at a genuine peak-happiness moment: a 3-star clear, once ever.
             if stars >= 3 && !GameData.shared.ratingPrompted {
                 GameData.shared.ratingPrompted = true; GameData.shared.save()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { AppReview.request() }
             }
-        } else { SFX.caught(); Haptics.caught() }
+        } else { SFX.caught(); Haptics.caught(); showAchievements(Achievements.record("busted")) }
         showResults(caught: caught, stars: stars)
     }
 
